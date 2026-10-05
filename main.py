@@ -98,11 +98,12 @@ async def initialize_system():
     speaker = None
     try:
         pir_sensor = PirSensor()
-        speaker = Speaker()
-        print('[Init] PIR 與無源喇叭初始化成功')
     except Exception as e:
-        pir_sensor = None
-        print(f'[Init] PIR／喇叭初始化失敗: {e}，略過移動音樂功能')
+        print(f'[Init] PIR 初始化失敗: {e}')
+    try:
+        speaker = Speaker()
+    except Exception as e:
+        print(f'[Init] 喇叭初始化失敗: {e}')
 
     print("[Init] 系統初始化完成\n")
     

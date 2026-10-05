@@ -11,7 +11,9 @@ import config
 class PirSensor:
     """PIR 高電位表示感測模組輸出移動訊號。"""
     def __init__(self):
-        self.pin = Pin(config.PIR_PIN, Pin.IN)
+        pin = getattr(config, 'PIR_PIN', 4)
+        self.pin = Pin(pin, Pin.IN)
+        print(f'[PIR] 初始化成功，GPIO={pin}，目前電位={self.pin.value()}')
 
     def is_motion(self):
         return bool(self.pin.value())

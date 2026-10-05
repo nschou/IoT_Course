@@ -4,13 +4,13 @@
 
 ## 初始化與呼叫
 
-`main.initialize_system()` 在通訊初始化後建立 `PirSensor()` 與 `Speaker()`；任一初始化失敗就略過移動音樂功能，其他功能繼續運作。`main()` 建立獨立的 `motion_event = uasyncio.Event()`，將兩個任務加入既有 `gather()`。
+`main.initialize_system()` 在通訊初始化後建立 `PirSensor()` 與 `Speaker()`；两個硬體分開初始化；喇叭失敗仍保留 PIR 讀值診斷，其他功能繼續運作。`main()` 建立獨立的 `motion_event = uasyncio.Event()`，將兩個任務加入既有 `gather()`。
 
-`PirSensor` 使用 `machine.Pin(config.PIR_PIN, Pin.IN)`，GPIO 為 4；`is_motion()` 將 `Pin.value()` 轉為布林值。`pir_monitor_task()` 每 500 ms 取樣，第一次只建立基準；後續低→高時呼叫 `motion_event.set()`。持續高電位不會重複觸發，需先回到低電位再升高。500 ms 輪詢可能漏掉比取樣間隔短的脈衝；PIR 開機暖機期間的低→高仍可能觸發，本版未加暖機遮蔽時間。
+`PirSensor` 使用 `machine.Pin(config.PIR_PIN, Pin.IN)`，GPIO 為 4；`is_motion()` 將 `Pin.value()` 轉為布林值。`pir_monitor_task()` 每 500 ms 取樣，首次取樣若為高電位即觸發一次，後續低→高時呼叫 `motion_event.set()`。持續高電位不會重複觸發，需先回到低電位再升高。500 ms 輪詢可能漏掉比取樣間隔短的脈衝；PIR 開機暖機期間的低→高仍可能觸發，本版未加暖機遮蔽時間。
 
 `music_on_motion_task()` 以 `await motion_event.wait()` 等待，收到後先 `clear()`，再 `await speaker.play_song(config.MOTION_MELODY)`。Event 是布林旗標而不是事件佇列；播放期間多次 set 只保留一次待播。因此旋律不重疊，播放完最多接續一次待播，不保留每次移動的數量。
 
-`Speaker` 使用 GPIO 6 的 `machine.PWM`，初始占空比 0；沿用 `ns_tools.NOTE_FREQS` 頻率表。旋律由配置提供：C4（262 Hz）、E4（330 Hz）、D4（294 Hz）、G3（196 Hz）各 0.3 秒，再休止 0.2 秒。發聲占空比 512，休止時為 0；PWM 頻率形成音高，無源喇叭需要這種交變訊號。
+`Speaker` 使用 GPIO 6 的 `machine.PWM`，初始占空比 0；在喇叭模組內保留範例所需的五個音符頻率，避免為音符表匯入網路／NTP 模組。旋律由配置提供：C4（262 Hz）、E4（330 Hz）、D4（294 Hz）、G3（196 Hz）各 0.3 秒，再休止 0.2 秒。發聲占空比 512，休止時為 0；PWM 頻率形成音高，無源喇叭需要這種交變訊號。
 
 原範例 `ns_tools.play_song()` 使用 `utime.sleep()`，會阻塞事件迴圈。本版不修改該既有函式，而由新封裝用 `await uasyncio.sleep(duration)` 等待，讓 RFID、按鈕、MQTT、Web 等協程繼續執行。音符時間是排程等待時間，並非硬體精準計時。
 
@@ -40,3 +40,26 @@ git switch -c restore-rfid rfid-validated-20261006
 ```
 
 再將基線應用檔案部署到 ESP32。Git 不會回復未追蹤的私人 `config.py`；本次只新增非機密配置，舊程式可忽略它們，若要完全一致請自行比對私人備份。單檔 `99_All-11-2.py` 及其公開範例本次未改動。
+
+## 故障診斷（2026-10-06 修正）
+
+序列埠會列出 PIR 與 PWM 初始化結果、實際腳位、任務啟動、PIR 電位變化，以及每 20 次取樣一次的讀值（預設約 10 秒）。若只看到 0，需確認装置 GPIO 4 接線、PIR 模組輸出及暖機；若始終為 1，首次應播放一次，之後須回到 0 才重新觸發。若看到播放開始／完成仍無聲，需以 GPIO 6 PWM 單獨測試區分喇叭與接線。這些判斷需實機日誌，尚未確認此次使用者裝置的根因。
+
+為相容尚未更新的裝置 config，缺少新參數時使用範例預設腳位、500 ms、512 占空比及旋律；自訂接線仍應明確配置，初始化日誌顯示的是實際使用值。
+
+可在停止主程式後於 ESP32 REPL 測試喇叭：
+
+```python
+from machine import Pin, PWM
+import time
+pwm = PWM(Pin(6, Pin.OUT))
+try:
+    pwm.freq(262)
+    pwm.duty(512)
+    time.sleep(1)
+finally:
+    pwm.duty(0)
+    pwm.deinit()
+```
+
+此處同步 sleep 只用於獨立硬體測試，不應放回多任務的播放流程。

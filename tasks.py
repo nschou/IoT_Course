@@ -69,34 +69,46 @@ async def button2_task(button2, dht_sensor, mqtt_manager, publish_event):
 # ==================== 任務：感測器讀取 ====================
 
 async def pir_monitor_task(pir_sensor, motion_event):
-    """只在低→高觸發；首次取樣是基準，不將開機高電位當新事件。"""
+    """首次高電位或後續低→高觸發；持續高電位不重播。"""
     if pir_sensor is None:
+        print('[Task] PIR 未初始化，跳過偵測任務')
         return
+    interval = getattr(config, 'PIR_POLL_INTERVAL_MS', 500)
+    print(f'[Task] PIR 偵測已啟動，輪詢={interval} ms')
     previous = None
+    samples = 0
     while True:
         try:
             current = pir_sensor.is_motion()
-            if previous is False and current:
+            if current != previous or samples % 20 == 0:
+                print(f'[PIR] GPIO 讀值={int(current)}')
+            if previous is not True and current:
                 motion_event.set()
                 print('[PIR] 偵測到移動，觸發音樂')
             previous = current
+            samples += 1
         except Exception as e:
             previous = None
             print(f'[Error] PIR 讀取異常: {e}')
-        await uasyncio.sleep_ms(config.PIR_POLL_INTERVAL_MS)
+        await uasyncio.sleep_ms(interval)
 
 
 async def music_on_motion_task(speaker, motion_event):
     """唯一喇叭使用者；播放中的事件合併為最多一次待播。"""
     if speaker is None:
+        print('[Task] 喇叭未初始化，跳過播放任務')
         return
+    melody = getattr(config, 'MOTION_MELODY',
+                     (('C4', 0.3), ('E4', 0.3), ('D4', 0.3), ('G3', 0.3), ('REST', 0.2)))
+    print('[Task] 音樂任務已啟動，等待移動事件')
     try:
         while True:
             await motion_event.wait()
             motion_event.clear()
             try:
                 print('[Speaker] 播放移動提示音樂')
-                await speaker.play_song(config.MOTION_MELODY)
+                await speaker.play_song(melody)
+                print('[Speaker] 播放完成，已靜音')
             except Exception as e:
                 print(f'[Error] 音樂播放異常: {e}')
                 await uasyncio.sleep(1)

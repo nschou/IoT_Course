@@ -26,7 +26,7 @@ def load_task(name, **namespace):
 
 
 class PirMusicTests(unittest.IsolatedAsyncioTestCase):
-    async def test_edges_ignore_initial_high_and_continuous_high(self):
+    async def test_initial_high_and_edges_without_continuous_retrigger(self):
         values = iter([True, True, False, True, True, False, True])
         count = 0
         samples = 0
@@ -43,7 +43,7 @@ class PirMusicTests(unittest.IsolatedAsyncioTestCase):
         task = load_task('pir_monitor_task', uasyncio=types.SimpleNamespace(sleep_ms=sleep))
         with self.assertRaises(StopCycles):
             await task(types.SimpleNamespace(is_motion=lambda: next(values)), Event())
-        self.assertEqual(count, 2)
+        self.assertEqual(count, 3)
 
     async def test_music_events_coalesce_and_cancel_silences(self):
         event = asyncio.Event()
@@ -81,7 +81,7 @@ class PirMusicTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_pwm_melody_yields_rest_and_finally(self):
         class PWM:
-            def __init__(self, pin, freq, duty):
+            def __init__(self, pin, freq=1000, duty=0):
                 self.level = duty
                 self.frequencies = []
                 self.closed = 0
@@ -119,7 +119,7 @@ class PirMusicTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(progress, 5)
         self.assertEqual(durations, [0.3, 0.3, 0.3, 0.3, 0.2])
         self.assertEqual(levels, [512, 512, 512, 512, 0])
-        self.assertEqual(speaker.pwm.frequencies, [262, 330, 294, 196])
+        self.assertEqual(speaker.pwm.frequencies, [1000, 262, 330, 294, 196])
         self.assertEqual(speaker.pwm.level, 0)
         with self.assertRaises(KeyError):
             await speaker.play_song([('C4', 0.01), ('INVALID', 0.01)])
