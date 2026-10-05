@@ -16,6 +16,16 @@
 
 Git commit hash 由歷史查詢取得；不要求把包含本紀錄的 commit hash 寫回本紀錄，避免自我引用。既有程式中的 v1.1.x／v1.2 註解不是統一的專案版本，本次開始以 Git commit 與後續 tag 作為版本依據。
 
+## CHG-20261006-003｜保存使用者確認正常的 RFID 版本
+
+- **類別：**需求變更（版本發布與驗證紀錄）。
+- **日期／紀錄時間：**2026-10-06 01:29:37 +08:00；實際實機測試時間未提供。
+- **原因：**使用者回報目前 RFID 功能正常，明確要求進版本並推送 GitHub。
+- **驗證來源：**ESP32 實機正常由使用者確認；未提供逐項驗收紀錄，不推論所有錯誤情境、卡片種類或瀏覽器皆已驗證。先前桌面 6 個 Python 測試及 JavaScript 測試結果仍見 CHG-20261006-002。本次沒有程式邏輯變更，不重複執行相同測試。
+- **作法：**fetch 核對遠端；更新 RFID_INTEGRATION.md 的驗證／版本狀態；提交紀錄後，將 feature/rfid-integration 快轉合併至 main，建立帶註解標籤 rfid-validated-20261006，推送 main、功能分支與標籤至既有 origin。保留原基線標籤，完成後核對遠端 SHA 與工作目錄。
+- **影響：**RFID 實作維持 6e341b6 的內容，只更新文件與版本指標；私人設定與備份仍排除於 GitHub。版本及 push 成功以 Git refs 為準。
+- **回復：**乾淨工作目錄執行 git switch -c restore-before-rfid baseline-before-rfid-20261006 可取得整合前基線；執行 git switch -c restore-rfid rfid-validated-20261006 可取得此次確認版本。Git 切換後仍需自行部署到 ESP32，私人 config.py 另行保留／回復，不採 reset --hard 或 force push。
+
 ## CHG-20261006-002｜將 RFID 接入模組化程式與 Web 顯示
 
 - **類別：**需求變更；連帶修正 API JSON 與網頁零值顯示 BUG。

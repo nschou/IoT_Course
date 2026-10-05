@@ -1,6 +1,6 @@
 # RFID 整合、部署與版本恢復
 
-此版沿用 `99_All-11-2.py` 的 `MFRC522Async`、`request(REQIDL)`、`anticoll()`、`to_hex_string(raw_uid)` 與 500 ms 輪詢，將單檔流程接入既有模組架構。桌面驗證已完成；ESP32 接線、刷卡、瀏覽器視覺布局尚需實機確認。
+此版沿用 `99_All-11-2.py` 的 `MFRC522Async`、`request(REQIDL)`、`anticoll()`、`to_hex_string(raw_uid)` 與 500 ms 輪詢，將單檔流程接入既有模組架構。桌面驗證已完成；2026-10-06 使用者回報本版 RFID 功能正常，並授權納入主分支。此實機結果來自使用者確認，未提供各項驗收步驟的詳細紀錄。
 
 ## 初始化與呼叫流程
 
@@ -49,7 +49,7 @@ node tests/test_rfid_ui.cjs
 
 ## GitHub 版本與回復
 
-修改前基線是 `38a65fd`，標籤為 `baseline-before-rfid-20261006`；RFID 版位於 `feature/rfid-integration`。此功能分支先推送供實機驗證，尚未合併 `main`。
+修改前基線是 `38a65fd`，標籤為 `baseline-before-rfid-20261006`。RFID 實作提交為 `6e341b6`，經使用者確認功能正常後，將功能分支快轉合併至 `main`，並建立 `rfid-validated-20261006` 標籤；該標籤包含本次驗證與版本保存紀錄。可用 `git ls-remote origin refs/heads/main 'refs/tags/rfid-validated-20261006*'` 核對遠端保存結果。
 
 在沒有未提交工作時，建立獨立回復分支：
 
