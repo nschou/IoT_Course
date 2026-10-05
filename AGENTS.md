@@ -13,6 +13,7 @@
 - 先閱讀 `GIT_VERSION_CONTROL.md`，遵循小範圍提交、檢查差異與測試的流程。
 - 不提交密碼、token、金鑰或裝置私密設定；不要以 `git add -f` 加入 `config.py`。
 - 本機 `config.py` 含私人 WiFi profiles，被 Git 排除。非機密配置變更必须同步到 `config.example.py`，秘密不得同步過去。
+- 本機單檔範例 `99_All-11-2.py` 同樣含私人 WiFi profiles，被 Git 排除；可公開的版本為 `99_All-11-2.example.py`，同步邏輯變更時不得複製私人 profiles。
 - 不擅自覆蓋其他人的修改，不因清理版控而刪除本機設定。
 - 遠端建立、公開與 push 需有使用者指定的目的地及授權。
 
@@ -20,3 +21,11 @@
 
 - LED 邏輯修改後執行 `python -B -m unittest discover -s tests -v`，或使用可用的 Python 執行檔。
 - 明確區分桌面 fake GPIO 測試與 ESP32 實機驗證；不可宣稱未執行的驗證已通過。
+
+## Markdown 與 Mermaid
+
+- 本專案所有新建或修改的 Markdown 檔案，其 Mermaid 圖必須符合 Mermaid **11.13.0** 的語法與支援範圍；不得使用需要更新版本的語法。
+- 參與者／節點代號避免保留關鍵字，例如時序圖不要用 `Loop` 作代號，改用 `Scheduler` 等名稱。
+- 時序圖訊息文字中的分號必須寫成 `#59;`，例如 `text/html#59; charset=utf-8`；其他特殊字元亦須依該版本語法正確跳脫。
+- 交付前使用 Mermaid 11.13.0 實際解析該檔案的全部 Mermaid 區塊；正規表示式或結構檢查不能取代解析器驗證。
+- 若改動布局或有渲染疑慮，另做渲染／視覺檢查。若無法完成解析或渲染，明確說明驗證限制，不宣稱已通過。

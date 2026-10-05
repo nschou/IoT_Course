@@ -10,6 +10,10 @@ Git 保存可回溯的快照；`ChangeLog.md` 保存為何變更與驗證範圍�
 - 初始化只能保存當前基線；建立 Git 前的變更已由 ChangeLog 追記，沒有自動生成完整舊版本。
 - 這次只建立本地版控，未指定遠端。不要以同步磁碟取代 Git 協作；避免兩台電腦同時寫同一份 `.git`，多台電腦各自 clone 再透過遠端交換提交。
 
+> 2026-10-05 後續交付更新：使用者已指定 GitHub repository `https://github.com/nschou/IoT_Course.git`，本次依授權設定 `origin` 並推送 `main`；下面未指定遠端的描述為初始化時狀態。可用 `git remote -v`、`git ls-remote origin refs/heads/main` 核對目前狀態。
+
+新增單檔範例也採相同機密排除策略：本機 `99_All-11-2.py` 不追蹤，公開版本為 `99_All-11-2.example.py`。新環境若要使用它，先複製至所需檔名並填入自己的 WiFi profiles；不要直接覆蓋已有私人設定的檔案。該範例不是目前主程式的必要依賴。
+
 ## 2. 概念與檢查位置
 
 | 區域 | 目的 | 檢查指令 |

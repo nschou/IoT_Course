@@ -1,5 +1,6 @@
 # Private local device configuration; track the sanitized template instead.
 /config.py
+/99_All-11-2.py
 /secrets.py
 .env
 .env.*
