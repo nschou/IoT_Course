@@ -16,6 +16,7 @@ try:
 except ImportError:
     import json
 from hardware.rfid import new_rfid_state
+from hardware.motion import new_motion_state
 
 # ==================== 全局變數 ====================
 
@@ -28,6 +29,7 @@ dht_sensor = None
 rgb_led = None
 light_sensor = None  # ✅ 新增光照傳感器
 rfid_state = new_rfid_state()  # main 注入同一份 RAM 狀態；API 不操作 SPI
+motion_state = new_motion_state()
 
 # HTML 頁面（從 index.html 導入）
 HTML_PAGE = None
@@ -155,7 +157,7 @@ async def api_data(request):
     # 序列化保證 None -> null，錯誤訊息中的引號也會正確跳脫。
     response_json = json.dumps({
         'temp': temp, 'humidity': humidity, 'light': light,
-        'status': 'ok', 'rfid': dict(rfid_state)
+        'status': 'ok', 'rfid': dict(rfid_state), 'motion': dict(motion_state)
     })
     
     #print(f"[Web] API 返回: 溫度={temp}, 濕度={humidity}, 光照={light}")

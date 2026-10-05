@@ -20,7 +20,7 @@
 
 本機 `config.py` 與公開 `config.example.py` 已同步新增 `PIR_PIN = 4`、`SPEAKER_PIN = 6`、`PIR_POLL_INTERVAL_MS = 500`、`SPEAKER_DUTY = 512` 與 `MOTION_MELODY`。私人 WiFi profiles 未修改、未納入 Git。
 
-部署 `main.py`、`tasks.py`、`hardware/sensors.py` 與新增 `hardware/speaker.py`；另更新裝置私人 `config.py` 的上述非機密參數，保留其 WiFi 設定。確認 `/lib/ns_tools.py` 與既有依賴存在，再重啟。此版未新增 Web 顯示、按鈕或 MQTT 移動發布。
+部署 `main.py`、`tasks.py`、`hardware/sensors.py` 與新增 `hardware/speaker.py`；另更新裝置私人 `config.py` 的上述非機密參數，保留其 WiFi 設定。確認 `/lib/ns_tools.py` 與既有依賴存在，再重啟。此版新增 Web 移動與播放狀態顯示，未新增網頁控制按鈕或 MQTT 移動發布。
 
 實機驗收建議：PIR 輸出先為低，再偵測移動，確認播放一次；持續高電位不連續重播；回低後再次移動會再播放；播放中刷 RFID、操作 LED 與網頁確認可回應；中斷程式確認喇叭停止。依實際 PIR 模組的保持時間與暖機特性判讀。
 
@@ -63,3 +63,19 @@ finally:
 ```
 
 此處同步 sleep 只用於獨立硬體測試，不應放回多任務的播放流程。
+
+## 網頁移動提示（2026-10-06）
+
+使用者已確認上傳裝置 config.py 後，PIR 與音樂功能正常；此前無聲原因是未部署新配置。新增網頁功能尚待實機確認。
+
+main 呼叫 hardware.motion.new_motion_state() 建立 RAM 字典，傳給兩個任務並注入 web_server.motion_state。PIR 任務更新 sensor_status、pir_high、detected、last_detected_at、count、sensor_error；音樂任務更新 music_status、music_error。各任務只更新自己負責的欄位，Web API 只複製字典、不存取 GPIO。初始化失敗以 unavailable 表示，詳細初始化錯誤見序列埠。
+
+每次首次高電位／低→高觸發都增加 count，記錄裝置日期時間，並設定原有播放 Event。detected 在 PIR 高電位時維持 true；PIR 回低後，只要距離最後觸發不足 5000 ms 仍為 true，超過後回 false。使用 time.ticks_ms()/ticks_diff() 計算相對時間，避免 NTP 校時或 tick 回繞影響 5 秒判斷；每 500 ms 取樣更新，所以可能稍晚才清除。感測錯誤優先顯示異常，不持續宣稱偵測有效。
+
+GET /api/data 增加 motion 物件。index.html 每秒讀取，detected 為 true 且感測正常時顯示「偵測到移動物」，否則顯示「等待移動」或未就緒／異常；並以 textContent 更新最後時間、次數、播放中／完成／失敗狀態。網路失敗時明確顯示資料與播放狀態未知，恢復後更新。播放狀態反映程式控制 PWM 的結果，不確認實際聲音；短於刷新週期的播放狀態可能只看到完成。
+
+count 是偵測觸發次數，並非播放次數；播放期間事件仍合併。最後時間與次數保留到重啟，不寫 Flash。只保留最新事件與狀態，不是完整移動歷史。
+
+網頁部署還需更新 web_server.py、index.html，以及新增 hardware/motion.py；main.py 與 tasks.py 也必須一併更新，保留已正常的 sensors.py、speaker.py 和私人 config.py。重啟 ESP32 讓 HTML 快取重新載入，再刷新瀏覽器。移動後確認裝置播放且網頁出現提示，PIR 回低並滿 5 秒後恢復等待，最後時間／次數保留；同時檢查 RFID 與原有按鈕。
+
+此次 10 個 Python 測試与網頁 JavaScript 模擬測試通過，包括 tick 回繞、5 秒邊界、持續高、清除、次數／時間、播放狀態、JSON 與網頁錯誤／斷線恢復；未做新版網頁的 ESP32 實機或瀏覽器視覺檢查。

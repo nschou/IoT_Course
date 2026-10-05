@@ -98,6 +98,9 @@ class RfidTests(unittest.TestCase):
             self.assertEqual(data['light'], 0)
             self.assertEqual(data['rfid']['error'], 'bad "card"')
             self.assertEqual(data['rfid']['last_uid'], '0102030404')
+            self.assertFalse(data['motion']['detected'])
+            self.assertEqual(data['motion']['count'], 0)
+            self.assertIsNone(data['motion']['last_detected_at'])
         finally:
             sys.path.remove(str(ROOT / 'lib'))
 

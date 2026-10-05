@@ -5,6 +5,7 @@ tasks.py - 非同步任務協程（修正版 v1.1.3）
 """
 
 import uasyncio
+import time
 import config
 from hardware.led import RgbLed
 from hardware.button import Button
@@ -68,7 +69,7 @@ async def button2_task(button2, dht_sensor, mqtt_manager, publish_event):
 
 # ==================== 任務：感測器讀取 ====================
 
-async def pir_monitor_task(pir_sensor, motion_event):
+async def pir_monitor_task(pir_sensor, motion_event, motion_state=None):
     """首次高電位或後續低→高觸發；持續高電位不重播。"""
     if pir_sensor is None:
         print('[Task] PIR 未初始化，跳過偵測任務')
@@ -77,23 +78,44 @@ async def pir_monitor_task(pir_sensor, motion_event):
     print(f'[Task] PIR 偵測已啟動，輪詢={interval} ms')
     previous = None
     samples = 0
+    last_detection_ms = None
     while True:
         try:
             current = pir_sensor.is_motion()
+            now_ms = time.ticks_ms() if motion_state is not None else None
             if current != previous or samples % 20 == 0:
                 print(f'[PIR] GPIO 讀值={int(current)}')
             if previous is not True and current:
                 motion_event.set()
+                if motion_state is not None:
+                    date_str, _, time_str = get_current_time()
+                    last_detection_ms = now_ms
+                    motion_state['last_detected_at'] = '{} {}'.format(date_str, time_str)
+                    motion_state['count'] += 1
                 print('[PIR] 偵測到移動，觸發音樂')
+            if motion_state is not None:
+                motion_state['sensor_status'] = 'ready'
+                motion_state['sensor_error'] = None
+                motion_state['pir_high'] = current
+                motion_state['detected'] = current or (
+                    last_detection_ms is not None and
+                    time.ticks_diff(now_ms, last_detection_ms) < 5000)
+                if not motion_state['detected']:
+                    last_detection_ms = None
             previous = current
             samples += 1
         except Exception as e:
             previous = None
+            if motion_state is not None:
+                motion_state['sensor_status'] = 'error'
+                motion_state['sensor_error'] = str(e)
+                motion_state['detected'] = False
+                motion_state['pir_high'] = False
             print(f'[Error] PIR 讀取異常: {e}')
         await uasyncio.sleep_ms(interval)
 
 
-async def music_on_motion_task(speaker, motion_event):
+async def music_on_motion_task(speaker, motion_event, motion_state=None):
     """唯一喇叭使用者；播放中的事件合併為最多一次待播。"""
     if speaker is None:
         print('[Task] 喇叭未初始化，跳過播放任務')
@@ -106,14 +128,24 @@ async def music_on_motion_task(speaker, motion_event):
             await motion_event.wait()
             motion_event.clear()
             try:
+                if motion_state is not None:
+                    motion_state['music_status'] = 'playing'
+                    motion_state['music_error'] = None
                 print('[Speaker] 播放移動提示音樂')
                 await speaker.play_song(melody)
                 print('[Speaker] 播放完成，已靜音')
+                if motion_state is not None:
+                    motion_state['music_status'] = 'completed'
             except Exception as e:
+                if motion_state is not None:
+                    motion_state['music_status'] = 'error'
+                    motion_state['music_error'] = str(e)
                 print(f'[Error] 音樂播放異常: {e}')
                 await uasyncio.sleep(1)
     finally:
         speaker.silence()
+        if motion_state is not None:
+            motion_state['music_status'] = 'stopped'
 
 
 async def dht11_read_task(dht_sensor):

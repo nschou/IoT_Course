@@ -234,6 +234,16 @@
             <div class="card-unit">保留最後成功結果（包含檢查碼），不代表卡片仍在感應區；重啟後清空。</div>
         </div>
 
+        <div class="card" style="margin-bottom: 30px;" aria-live="polite">
+            <div class="card-title">🚶 移動偵測與音樂</div>
+            <div class="card-value" id="motionMessage">等待資料</div>
+            <p>最後偵測：<span id="motionTime">--</span></p>
+            <p>偵測次數：<span id="motionCount">0</span></p>
+            <p>喇叭：<span id="musicStatus">等待資料</span></p>
+            <p id="motionError"></p>
+            <div class="card-unit">提示至少保留 5 秒；音樂由 ESP32 喇叭播放，狀態不代表實際有聲。紀錄重啟後清空。</div>
+        </div>
+
         <div class="buttons">
             <button class="btn-primary" onclick="toggleLED()">按鈕 1: 切換 LED</button>
             <button class="btn-primary" onclick="publishData()">按鈕 2: 發布數據</button>
@@ -278,12 +288,26 @@
                 document.getElementById('rfidReadAt').textContent = rfid.last_read_at ?? '--';
                 document.getElementById('rfidStatus').textContent = rfidLabels[rfid.status] || '未知';
                 document.getElementById('rfidError').textContent = rfid.error ?? '';
+                const motion = data.motion || {};
+                const sensorReady = motion.sensor_status === 'ready';
+                document.getElementById('motionMessage').textContent = sensorReady
+                    ? (motion.detected ? '偵測到移動物' : '等待移動')
+                    : (motion.sensor_status === 'error' ? 'PIR 讀取異常' : 'PIR 尚未就緒');
+                document.getElementById('motionMessage').style.color = sensorReady && motion.detected ? '#b42318' : '#333';
+                document.getElementById('motionTime').textContent = motion.last_detected_at ?? '--';
+                document.getElementById('motionCount').textContent = motion.count ?? 0;
+                const musicLabels = {starting: '初始化中', idle: '等待移動', playing: '播放中',
+                    completed: '播放完成', error: '播放失敗', unavailable: '未初始化', stopped: '已停止'};
+                document.getElementById('musicStatus').textContent = musicLabels[motion.music_status] || '未知';
+                document.getElementById('motionError').textContent = [motion.sensor_error, motion.music_error].filter(Boolean).join('；');
                 document.getElementById('status').textContent = '🟢 正常';
                 
             } catch (error) {
                 console.error('數據更新失敗:', error);
                 document.getElementById('status').textContent = '🔴 連接失敗';
                 document.getElementById('rfidStatus').textContent = '連接失敗，顯示上次資料';
+                document.getElementById('motionMessage').textContent = '連接失敗，顯示上次資料';
+                document.getElementById('musicStatus').textContent = '連接失敗，狀態未知';
             }
         }
         

@@ -7,12 +7,13 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const source = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const elements = {};
 const ids = [...html.matchAll(/id="([^"]+)"/g)].map(m => m[1]);
-ids.forEach(id => elements[id] = { textContent: '' });
+ids.forEach(id => elements[id] = { textContent: '', style: {} });
 let fail = false;
 let rfid = {status: 'ready', last_uid: '0102030404', last_read_at: '2026-10-06 00:30:00', error: null};
+let motion = {sensor_status: 'ready', detected: false, count: 0, last_detected_at: null, music_status: 'idle'};
 const context = vm.createContext({
     document: { getElementById(id) { assert.ok(elements[id], `Missing element ${id}`); return elements[id]; } },
-    fetch: async () => { if (fail) throw Error('offline'); return {ok: true, json: async () => ({temp: 0, humidity: 0, light: 0, rfid})}; },
+    fetch: async () => { if (fail) throw Error('offline'); return {ok: true, json: async () => ({temp: 0, humidity: 0, light: 0, rfid, motion})}; },
     setInterval() {}, alert() {}, console: {log() {}, error() {}}
 });
 (async () => {
@@ -21,6 +22,18 @@ const context = vm.createContext({
     assert.equal(elements.rfidUid.textContent, '0102030404');
     assert.equal(elements.lightCard.textContent, 0);
     assert.equal(elements.tempCard.textContent, 0);
+    assert.equal(elements.motionMessage.textContent, '等待移動');
+    assert.equal(elements.motionCount.textContent, 0);
+    motion = {...motion, detected: true, count: 1, last_detected_at: '2026-10-06 02:41:04', music_status: 'playing'};
+    await context.updateData();
+    assert.equal(elements.motionMessage.textContent, '偵測到移動物');
+    assert.equal(elements.musicStatus.textContent, '播放中');
+    assert.equal(elements.motionTime.textContent, motion.last_detected_at);
+    motion = {...motion, detected: false, music_status: 'completed'};
+    await context.updateData();
+    assert.equal(elements.motionMessage.textContent, '等待移動');
+    assert.equal(elements.motionCount.textContent, 1);
+    assert.equal(elements.musicStatus.textContent, '播放完成');
     rfid = {status: 'init_error', last_uid: null, last_read_at: null, error: '<not html>'};
     await context.updateData();
     assert.equal(elements.rfidUid.textContent, '尚未讀卡');
@@ -29,8 +42,14 @@ const context = vm.createContext({
     fail = true;
     await context.updateData();
     assert.equal(elements.status.textContent, '🔴 連接失敗');
+    assert.equal(elements.musicStatus.textContent, '連接失敗，狀態未知');
     fail = false;
     await context.updateData();
     assert.equal(elements.status.textContent, '🟢 正常');
+    motion = {...motion, sensor_status: 'error', sensor_error: '<sensor error>', music_status: 'error', music_error: 'bad "note"'};
+    await context.updateData();
+    assert.equal(elements.motionMessage.textContent, 'PIR 讀取異常');
+    assert.equal(elements.musicStatus.textContent, '播放失敗');
+    assert.equal(elements.motionError.textContent, '<sensor error>；bad "note"');
     console.log('RFID page script: PASS');
 })().catch(error => { console.error(error); process.exitCode = 1; });

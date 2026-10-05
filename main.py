@@ -12,6 +12,7 @@ from hardware.led import RgbLed
 from hardware.button import Button
 from hardware.sensors import Dht11Sensor, LightSensor, PirSensor
 from hardware.speaker import Speaker
+from hardware.motion import new_motion_state
 from hardware.display import OledDisplay
 from hardware.rfid import RfidReader, new_rfid_state
 from communication.mqtt_client import MqttManager
@@ -124,6 +125,9 @@ async def main():
     # 建立任務間通訊事件
     publish_event = uasyncio.Event()
     motion_event = uasyncio.Event()
+    motion_state = new_motion_state()
+    motion_state['sensor_status'] = 'ready' if pir_sensor is not None else 'unavailable'
+    motion_state['music_status'] = 'idle' if speaker is not None else 'unavailable'
     
     # 初始化 Web Server 的全局變數
     web_server.mqtt_manager = mqtt_manager
@@ -132,6 +136,7 @@ async def main():
     web_server.rgb_led = rgb_led
     web_server.light_sensor = light_sensor
     web_server.rfid_state = rfid_state
+    web_server.motion_state = motion_state
     
     try:
         print("[Main] 啟動所有協程...\n")
@@ -146,8 +151,8 @@ async def main():
             tasks.dht11_read_task(dht_sensor),
             tasks.light_sensor_task(light_sensor, rgb_led),
             tasks.rfid_read_task(rfid_reader, rfid_state),
-            tasks.pir_monitor_task(pir_sensor, motion_event),
-            tasks.music_on_motion_task(speaker, motion_event),
+            tasks.pir_monitor_task(pir_sensor, motion_event, motion_state),
+            tasks.music_on_motion_task(speaker, motion_event, motion_state),
             
             # 顯示與通訊任務
             tasks.oled_display_task(dht_sensor),

@@ -11,6 +11,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import config
+from hardware.motion import new_motion_state
 
 
 class StopCycles(BaseException):
@@ -26,6 +27,29 @@ def load_task(name, **namespace):
 
 
 class PirMusicTests(unittest.IsolatedAsyncioTestCase):
+    async def test_motion_hold_expiry_high_and_tick_wrap(self):
+        period = 1 << 30
+        ticks = iter([period - 1000, 0, 3999, 4000, 4500, 10000, 10500])
+        levels = iter([True, False, False, False, True, True, False])
+        state = new_motion_state()
+        snapshots = []
+        async def sleep(_):
+            snapshots.append(dict(state))
+            if len(snapshots) == 7:
+                raise StopCycles()
+        clock = types.SimpleNamespace(ticks_ms=lambda: next(ticks),
+            ticks_diff=lambda a, b: ((a - b + period // 2) % period) - period // 2)
+        task = load_task('pir_monitor_task', time=clock,
+            get_current_time=lambda: ('2026-10-06', '二', '02:41:04'),
+            uasyncio=types.SimpleNamespace(sleep_ms=sleep))
+        with self.assertRaises(StopCycles):
+            await task(types.SimpleNamespace(is_motion=lambda: next(levels)), asyncio.Event(), state)
+        self.assertEqual([s['detected'] for s in snapshots], [True, True, True, False, True, True, False])
+        self.assertEqual(state['count'], 2)
+        self.assertEqual(state['last_detected_at'], '2026-10-06 02:41:04')
+        self.assertEqual(state['sensor_status'], 'ready')
+        self.assertEqual(new_motion_state()['count'], 0)
+
     async def test_initial_high_and_edges_without_continuous_retrigger(self):
         values = iter([True, True, False, True, True, False, True])
         count = 0
@@ -63,10 +87,12 @@ class PirMusicTests(unittest.IsolatedAsyncioTestCase):
             def silence(self):
                 self.silenced = True
         speaker = Speaker()
+        state = new_motion_state()
         task = load_task('music_on_motion_task', uasyncio=asyncio)
-        running = asyncio.create_task(task(speaker, event))
+        running = asyncio.create_task(task(speaker, event, state))
         event.set()
         await asyncio.wait_for(started.wait(), 1)
+        self.assertEqual(state['music_status'], 'playing')
         # Several movements during the first song become exactly one pending song.
         for _ in range(5):
             event.set()
@@ -74,10 +100,12 @@ class PirMusicTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(second.wait(), 1)
         await asyncio.sleep(0)
         self.assertEqual(speaker.plays, 2)
+        self.assertEqual(state['music_status'], 'completed')
         running.cancel()
         with self.assertRaises(asyncio.CancelledError):
             await running
         self.assertTrue(speaker.silenced)
+        self.assertEqual(state['music_status'], 'stopped')
 
     async def test_pwm_melody_yields_rest_and_finally(self):
         class PWM:
