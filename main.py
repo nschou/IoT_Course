@@ -10,7 +10,8 @@ import sys
 import config
 from hardware.led import RgbLed
 from hardware.button import Button
-from hardware.sensors import Dht11Sensor, LightSensor
+from hardware.sensors import Dht11Sensor, LightSensor, PirSensor
+from hardware.speaker import Speaker
 from hardware.display import OledDisplay
 from hardware.rfid import RfidReader, new_rfid_state
 from communication.mqtt_client import MqttManager
@@ -30,7 +31,7 @@ import web_server
 async def initialize_system():
     """
     初始化系統的所有硬體與通訊模組
-    返回: LED、按鈕、感測器、MQTT、RFID 物件與 RFID 共享狀態元組
+    返回: LED、按鈕、感測器、MQTT、RFID 狀態、PIR 與喇叭元組
     """
     print("\n" + "="*60)
     print("系統初始化")
@@ -92,10 +93,21 @@ async def initialize_system():
     if not mqtt_connected:
         print("[Init] ⚠️ MQTT 連線失敗，但繼續運行（其他功能仍可用）")
     
+    # 通訊初始化後再建立 PWM，後續進入 main 的 finally 管理資源。
+    pir_sensor = None
+    speaker = None
+    try:
+        pir_sensor = PirSensor()
+        speaker = Speaker()
+        print('[Init] PIR 與無源喇叭初始化成功')
+    except Exception as e:
+        pir_sensor = None
+        print(f'[Init] PIR／喇叭初始化失敗: {e}，略過移動音樂功能')
+
     print("[Init] 系統初始化完成\n")
     
     return (rgb_led, button1, button2, dht_sensor, light_sensor,
-            mqtt_manager, rfid_reader, rfid_state)
+            mqtt_manager, rfid_reader, rfid_state, pir_sensor, speaker)
 
 
 # ==================== 主非同步函式 ====================
@@ -106,10 +118,11 @@ async def main():
     """
     # 初始化系統
     (rgb_led, button1, button2, dht_sensor, light_sensor,
-     mqtt_manager, rfid_reader, rfid_state) = await initialize_system()
+     mqtt_manager, rfid_reader, rfid_state, pir_sensor, speaker) = await initialize_system()
     
     # 建立任務間通訊事件
     publish_event = uasyncio.Event()
+    motion_event = uasyncio.Event()
     
     # 初始化 Web Server 的全局變數
     web_server.mqtt_manager = mqtt_manager
@@ -132,6 +145,8 @@ async def main():
             tasks.dht11_read_task(dht_sensor),
             tasks.light_sensor_task(light_sensor, rgb_led),
             tasks.rfid_read_task(rfid_reader, rfid_state),
+            tasks.pir_monitor_task(pir_sensor, motion_event),
+            tasks.music_on_motion_task(speaker, motion_event),
             
             # 顯示與通訊任務
             tasks.oled_display_task(dht_sensor),
@@ -156,6 +171,9 @@ async def main():
         except:
             pass
         raise
+    finally:
+        if speaker is not None:
+            speaker.deinit()
 
 
 # ==================== 程式進入點 ====================

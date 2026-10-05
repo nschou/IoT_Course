@@ -68,6 +68,42 @@ async def button2_task(button2, dht_sensor, mqtt_manager, publish_event):
 
 # ==================== 任務：感測器讀取 ====================
 
+async def pir_monitor_task(pir_sensor, motion_event):
+    """只在低→高觸發；首次取樣是基準，不將開機高電位當新事件。"""
+    if pir_sensor is None:
+        return
+    previous = None
+    while True:
+        try:
+            current = pir_sensor.is_motion()
+            if previous is False and current:
+                motion_event.set()
+                print('[PIR] 偵測到移動，觸發音樂')
+            previous = current
+        except Exception as e:
+            previous = None
+            print(f'[Error] PIR 讀取異常: {e}')
+        await uasyncio.sleep_ms(config.PIR_POLL_INTERVAL_MS)
+
+
+async def music_on_motion_task(speaker, motion_event):
+    """唯一喇叭使用者；播放中的事件合併為最多一次待播。"""
+    if speaker is None:
+        return
+    try:
+        while True:
+            await motion_event.wait()
+            motion_event.clear()
+            try:
+                print('[Speaker] 播放移動提示音樂')
+                await speaker.play_song(config.MOTION_MELODY)
+            except Exception as e:
+                print(f'[Error] 音樂播放異常: {e}')
+                await uasyncio.sleep(1)
+    finally:
+        speaker.silence()
+
+
 async def dht11_read_task(dht_sensor):
     """
     DHT11 溫濕度讀取任務

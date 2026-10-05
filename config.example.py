@@ -17,6 +17,8 @@ BUTTON2_PIN = 21
 # 感測器腳位配置
 DHT11_PIN = 18
 TEMT_ADC_PIN = 8
+PIR_PIN = 4
+SPEAKER_PIN = 6
 
 # I2C 配置（OLED）
 I2C_ID = 0
@@ -48,6 +50,12 @@ OLED_UPDATE_INTERVAL_SEC = 1
 
 # RFID 讀卡間隔（避免反應過快）
 RFID_POLL_INTERVAL_MS = 500
+
+# PIR 移動提示：每次低→高觸發，音符時間單位為秒
+PIR_POLL_INTERVAL_MS = 500
+SPEAKER_DUTY = 512
+MOTION_MELODY = (('C4', 0.3), ('E4', 0.3), ('D4', 0.3),
+                 ('G3', 0.3), ('REST', 0.2))
 
 # 按鈕去彈跳時間
 BUTTON_DEBOUNCE_MS = 20         # 按鈕穩定判定時間

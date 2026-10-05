@@ -8,6 +8,15 @@ import dht
 import config
 
 
+class PirSensor:
+    """PIR 高電位表示感測模組輸出移動訊號。"""
+    def __init__(self):
+        self.pin = Pin(config.PIR_PIN, Pin.IN)
+
+    def is_motion(self):
+        return bool(self.pin.value())
+
+
 class Dht11Sensor:
     """DHT11 溫濕度感測器控制類別"""
     

@@ -16,6 +16,19 @@
 
 Git commit hash 由歷史查詢取得；不要求把包含本紀錄的 commit hash 寫回本紀錄，避免自我引用。既有程式中的 v1.1.x／v1.2 註解不是統一的專案版本，本次開始以 Git commit 與後續 tag 作為版本依據。
 
+## CHG-20261006-004｜整合 PIR 移動與非同步音樂播放
+
+- **類別：**需求變更。
+- **日期／作業開始時間：**2026-10-06 02:22:36 +08:00。
+- **測試完成／紀錄時間：**2026-10-06 02:24:45 +08:00。
+- **原因：**使用者同意參考單檔範例將 PIR 與無源喇叭接入 main；原範例同步 sleep 會阻塞其他協程，持續高電位也會反覆觸發，採用已確認的非同步播放與低→高觸發策略。
+- **作法：**hardware/sensors.py 新增 PirSensor（GPIO 4）；新增 hardware/speaker.py（GPIO 6 PWM），沿用 ns_tools.NOTE_FREQS，以 await uasyncio.sleep 播放 C4/E4/D4/G3 各 0.3 秒加 0.2 秒休止。config.py 與 config.example.py 同步非機密腳位、500 ms 輪詢、512 占空比與旋律，私人 WiFi 值保留。
+- **呼叫／生命週期：**main 初始化兩個硬體與獨立 Event，加入 PIR 偵測及播放任務。首次取樣建立基準，後續低→高才 set；播放任務 wait 後先 clear，再播放。Event 合併播放中多次觸發為最多一次待播，不累積計數或歷史；重啟清空事件與基準。播放 finally 靜音，main finally 釋放 PWM；初始化失败略過該功能，讀取／播放例外記錄並延遲重試。
+- **影響：**不變更 RFID／LED／Web／MQTT 行為，未新增網頁或移動 MQTT 發布；ns_tools 原同步播放函式及单檔範例不改。500 ms 取樣可能漏掉短脈衝，未新增 PIR 暖機遮蔽；PWM 與音量需實機確認。
+- **驗證：**9 個 Python 測試通過（3 個新增 PIR／音樂測試與 6 個 LED／RFID 回歸），涵蓋邊緣觸發、初始高電位、持續高電位、事件合併、協程讓出、音符與休止、錯誤／取消後靜音及重複釋放。既有 RFID 網頁 JavaScript 測試通過。均為桌面 fake 測試，未執行 ESP32 聲音、接線或時序實機驗證。
+- **部署／回復：**詳見 PIR_MUSIC_GUIDE.md；部署 main/tasks/sensors/speaker 並新增裝置私人配置。回復使用 rfid-validated-20261006 標籤，重新部署舊應用；私人 config.py 不由 Git 回復。
+- **版控：**在 feature/pir-music 本地提交；依已確認方案，等待使用者實機確認再合併與推送。main 與 GitHub RFID 標籤保持既有版本。
+
 ## CHG-20261006-003｜保存使用者確認正常的 RFID 版本
 
 - **類別：**需求變更（版本發布與驗證紀錄）。
