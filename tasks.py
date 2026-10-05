@@ -116,6 +116,31 @@ async def light_sensor_task(light_sensor, rgb_led):
 
 # ==================== 任務：顯示更新 ====================
 
+async def rfid_read_task(rfid_reader, rfid_state):
+    """唯一讀卡者：500 ms 輪詢，將最後成功結果提供給 Web API。"""
+    if rfid_reader is None:
+        print("[Task] RFID 未初始化，跳過讀卡任務")
+        return
+    print("[Task] RFID 讀卡任務已啟動")
+    while True:
+        try:
+            uid = await rfid_reader.read_uid()
+            if uid is not None:
+                date_str, weekday_str, time_str = get_current_time()
+                # 更新期間沒有 await；協作式排程下 API 不會讀到半份紀錄。
+                rfid_state['last_uid'] = uid
+                rfid_state['last_read_at'] = '{} {}'.format(date_str, time_str)
+                rfid_state['status'] = 'ready'
+                rfid_state['error'] = None
+                print('RFID：', uid)
+            # 無卡不清除最後紀錄；錯誤只在下一次成功讀卡後解除。
+        except Exception as e:
+            rfid_state['status'] = 'read_error'
+            rfid_state['error'] = str(e)
+            print(f"[Error] RFID 讀卡異常: {e}")
+        await uasyncio.sleep_ms(config.RFID_POLL_INTERVAL_MS)
+
+
 async def oled_display_task(dht_sensor):
     """
     OLED 顯示更新任務（修正版）

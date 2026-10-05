@@ -16,6 +16,18 @@
 
 Git commit hash 由歷史查詢取得；不要求把包含本紀錄的 commit hash 寫回本紀錄，避免自我引用。既有程式中的 v1.1.x／v1.2 註解不是統一的專案版本，本次開始以 Git commit 與後續 tag 作為版本依據。
 
+## CHG-20261006-002｜將 RFID 接入模組化程式與 Web 顯示
+
+- **類別：**需求變更；連帶修正 API JSON 與網頁零值顯示 BUG。
+- **日期／紀錄時間：**2026-10-06 00:31:46 +08:00。
+- **需求原因：**使用者同意參考單檔範例整合 RFID，並保存可恢復的修改前版本。
+- **作法：**新增 hardware/rfid.py，延後明確匯入 MFRC522Async、to_hex_string，沿用配置腳位與 request(REQIDL) → anticoll() → 完整 raw_uid 轉換。main 初始化 RFID 與共享字典，注入 Web Server 並加入 gather；tasks 每輪讀取後等待 500 ms，成功更新最後識別碼與装置時間，例外保留最後紀錄並持續重試。
+- **Web 資料：**/api/data 回傳 rfid.status、last_uid、last_read_at、error；API 只複製快取、不直接讀 SPI。以 ujson/json.dumps 取代手組 JSON，避免 None 產生非法 JSON，並跳脫字串。index.html 新增最後讀取卡片區，沿用每秒刷新，以 textContent 顯示；零值使用 ?? 保留，檢查 HTTP 狀態，成功恢復連線顯示。
+- **生命週期／影響：**最後紀錄只在 RAM，成功覆寫、無回應保留、重啟清空；讀取例外後下一次成功才清除錯誤。初始化失敗跳過讀卡、保留其他功能。沿用驅動 5-byte 結果（含 BCC），未新增長 UID、刷卡歷史、寫卡、RFID MQTT 或門禁。request 無法區分無卡與部分通訊失敗，ready 只代表已初始化。
+- **驗證：**6 個 Python 測試通過（3 個原有 LED 測試及 3 個 RFID／API 測試）；實際網頁 JavaScript 在模擬 DOM/fetch 下驗證初始值、讀卡顯示、零值、錯誤字串、連線失敗與恢复通過。未做 ESP32 實機、SPI 接線或瀏覽器視覺驗證。
+- **部署／回復：**詳見 RFID_INTEGRATION.md；部署新硬體模組及四個應用檔案，確認 /lib 驅動與 aiot_tools 依賴後重啟。修改前標籤 baseline-before-rfid-20261006 已推送，基線 commit 為 38a65fd；使用乾淨工作目錄建立回復分支並重新部署。私人配置由本機備份另行處理。
+- **版控：**在 feature/rfid-integration 提交並推送；待 ESP32 實機驗證後再合併 main。Git refs 為推送結果依據。
+
 ## CHG-20261006-001｜保存 RFID 整合前基線
 
 - **類別：**需求變更。

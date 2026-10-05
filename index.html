@@ -87,6 +87,9 @@
             color: #999;
             font-size: 0.9em;
         }
+
+        #rfidUid { overflow-wrap: anywhere; font-size: 1.4em; }
+        #rfidError { color: #b42318; overflow-wrap: anywhere; }
         
         .buttons {
             display: grid;
@@ -222,6 +225,15 @@
             </div>
         </div>
         
+        <div class="card" style="margin-bottom: 30px;">
+            <div class="card-title">📇 RFID 最後讀取紀錄</div>
+            <div class="card-value" id="rfidUid">尚未讀卡</div>
+            <p>讀取時間：<span id="rfidReadAt">--</span></p>
+            <p>讀卡任務：<span id="rfidStatus">等待資料</span></p>
+            <p id="rfidError"></p>
+            <div class="card-unit">保留最後成功結果（包含檢查碼），不代表卡片仍在感應區；重啟後清空。</div>
+        </div>
+
         <div class="buttons">
             <button class="btn-primary" onclick="toggleLED()">按鈕 1: 切換 LED</button>
             <button class="btn-primary" onclick="publishData()">按鈕 2: 發布數據</button>
@@ -238,25 +250,40 @@
         async function updateData() {
             try {
                 const response = await fetch('/api/data');
+                if (!response.ok) throw new Error('HTTP ' + response.status);
                 const data = await response.json();
                 
                 // 更新溫度
-                const temp = data.temp || '--';
+                const temp = data.temp ?? '--';
                 document.getElementById('temp').textContent = temp;
                 document.getElementById('tempCard').textContent = temp;
                 
                 // 更新濕度
-                const humidity = data.humidity || '--';
+                const humidity = data.humidity ?? '--';
                 document.getElementById('humidity').textContent = humidity;
                 document.getElementById('humidityCard').textContent = humidity;
                 
                 // 更新光照
-                const light = data.light || '--';
+                const light = data.light ?? '--';
                 document.getElementById('lightCard').textContent = light;
+
+                const rfid = data.rfid || {};
+                const rfidLabels = {
+                    starting: '初始化中',
+                    ready: '已初始化，持續輪詢',
+                    init_error: '初始化失敗',
+                    read_error: '讀卡異常，持續重試'
+                };
+                document.getElementById('rfidUid').textContent = rfid.last_uid ?? '尚未讀卡';
+                document.getElementById('rfidReadAt').textContent = rfid.last_read_at ?? '--';
+                document.getElementById('rfidStatus').textContent = rfidLabels[rfid.status] || '未知';
+                document.getElementById('rfidError').textContent = rfid.error ?? '';
+                document.getElementById('status').textContent = '🟢 正常';
                 
             } catch (error) {
                 console.error('數據更新失敗:', error);
                 document.getElementById('status').textContent = '🔴 連接失敗';
+                document.getElementById('rfidStatus').textContent = '連接失敗，顯示上次資料';
             }
         }
         

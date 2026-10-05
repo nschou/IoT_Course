@@ -11,6 +11,11 @@ web_server.py - Microdot Web Server for IoT System v1.2
 from microdot import Microdot, Response
 import network
 import uasyncio
+try:
+    import ujson as json
+except ImportError:
+    import json
+from hardware.rfid import new_rfid_state
 
 # ==================== 全局變數 ====================
 
@@ -22,6 +27,7 @@ publish_event = None
 dht_sensor = None
 rgb_led = None
 light_sensor = None  # ✅ 新增光照傳感器
+rfid_state = new_rfid_state()  # main 注入同一份 RAM 狀態；API 不操作 SPI
 
 # HTML 頁面（從 index.html 導入）
 HTML_PAGE = None
@@ -132,7 +138,7 @@ async def api_data(request):
     """
     API 端點：返回傳感器數據（JSON 格式）
     ✅ 修復：添加光照值返回
-    返回：{ temp: 溫度, humidity: 濕度, light: 光照值 }
+    返回：{ temp, humidity, light, status, rfid: 最後讀取狀態快照 }
     """
     #print("[Web] GET /api/data")
     
@@ -146,13 +152,11 @@ async def api_data(request):
     if humidity is not None:
         humidity = round(humidity, 1)
     
-    # 手動構造 JSON 字符串（MicroPython 中不能依賴 json 庫）
-    response_json = '{'
-    response_json += f'"temp": {temp},'
-    response_json += f'"humidity": {humidity},'
-    response_json += f'"light": {light},'  # ✅ 包含光照值
-    response_json += '"status": "ok"'
-    response_json += '}'
+    # 序列化保證 None -> null，錯誤訊息中的引號也會正確跳脫。
+    response_json = json.dumps({
+        'temp': temp, 'humidity': humidity, 'light': light,
+        'status': 'ok', 'rfid': dict(rfid_state)
+    })
     
     #print(f"[Web] API 返回: 溫度={temp}, 濕度={humidity}, 光照={light}")
     

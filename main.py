@@ -12,6 +12,7 @@ from hardware.led import RgbLed
 from hardware.button import Button
 from hardware.sensors import Dht11Sensor, LightSensor
 from hardware.display import OledDisplay
+from hardware.rfid import RfidReader, new_rfid_state
 from communication.mqtt_client import MqttManager
 
 # 導入修正後的 WiFi 模組
@@ -29,7 +30,7 @@ import web_server
 async def initialize_system():
     """
     初始化系統的所有硬體與通訊模組
-    返回: (rgb_led, button1, button2, dht_sensor, light_sensor, mqtt_manager) 元組
+    返回: LED、按鈕、感測器、MQTT、RFID 物件與 RFID 共享狀態元組
     """
     print("\n" + "="*60)
     print("系統初始化")
@@ -50,6 +51,17 @@ async def initialize_system():
     
     # 初次測量
     dht_sensor.measure()
+
+    print("[Init] 初始化 RFID...")
+    rfid_state = new_rfid_state()
+    rfid_reader = None
+    try:
+        rfid_reader = RfidReader()
+        rfid_state['status'] = 'ready'
+    except Exception as e:
+        rfid_state['status'] = 'init_error'
+        rfid_state['error'] = str(e)
+        print(f"[RFID] 初始化失敗: {e}，其他功能繼續運行")
     
     print("[Init] 硬體初始化完成\n")
     
@@ -82,7 +94,8 @@ async def initialize_system():
     
     print("[Init] 系統初始化完成\n")
     
-    return rgb_led, button1, button2, dht_sensor, light_sensor, mqtt_manager
+    return (rgb_led, button1, button2, dht_sensor, light_sensor,
+            mqtt_manager, rfid_reader, rfid_state)
 
 
 # ==================== 主非同步函式 ====================
@@ -92,7 +105,8 @@ async def main():
     主程式：初始化系統並啟動所有協程
     """
     # 初始化系統
-    rgb_led, button1, button2, dht_sensor, light_sensor, mqtt_manager = await initialize_system()
+    (rgb_led, button1, button2, dht_sensor, light_sensor,
+     mqtt_manager, rfid_reader, rfid_state) = await initialize_system()
     
     # 建立任務間通訊事件
     publish_event = uasyncio.Event()
@@ -103,6 +117,7 @@ async def main():
     web_server.dht_sensor = dht_sensor
     web_server.rgb_led = rgb_led
     web_server.light_sensor = light_sensor
+    web_server.rfid_state = rfid_state
     
     try:
         print("[Main] 啟動所有協程...\n")
@@ -116,6 +131,7 @@ async def main():
             # 感測器讀取任務
             tasks.dht11_read_task(dht_sensor),
             tasks.light_sensor_task(light_sensor, rgb_led),
+            tasks.rfid_read_task(rfid_reader, rfid_state),
             
             # 顯示與通訊任務
             tasks.oled_display_task(dht_sensor),
