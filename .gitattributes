@@ -1,0 +1,6 @@
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+# Bitmap font data is binary; never convert line endings.
+*.12 binary

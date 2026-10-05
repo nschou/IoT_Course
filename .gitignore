@@ -1,0 +1,24 @@
+# Private local device configuration; track the sanitized template instead.
+/config.py
+/secrets.py
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Python and local tooling output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Local history backups
+*.bundle
