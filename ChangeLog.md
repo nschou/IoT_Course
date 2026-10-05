@@ -16,6 +16,16 @@
 
 Git commit hash 由歷史查詢取得；不要求把包含本紀錄的 commit hash 寫回本紀錄，避免自我引用。既有程式中的 v1.1.x／v1.2 註解不是統一的專案版本，本次開始以 Git commit 與後續 tag 作為版本依據。
 
+## CHG-20261006-001｜保存 RFID 整合前基線
+
+- **類別：**需求變更。
+- **日期／紀錄時間：**2026-10-06 00:26:05 +08:00。
+- **原因：**使用者同意 RFID 整合與 GitHub 版本保存；原提交未包含新加入的 Microdot 與個人 VS Code 設定。
+- **作法：**納入本機既有 Microdot 2.4.0 套件；同步去除私人 WiFi profiles 的單檔範例；保留個人 settings.json，新增可攜的 settings.example.json；排除 typings 與 .local-backups。私人 config.py、單檔原稿及 settings.json 複製至 .local-backups/baseline-before-rfid-20261006（只留本機）。
+- **版本保存：**提交後建立 baseline-before-rfid-20261006 標籤並推送 main 與標籤；以 Git refs 核對實際結果。
+- **影響／限制：**此基線不變更應用邏輯；Microdot 是使用者已有的檔案，尚未驗證 ESP32 實機。GitHub 不含私人配置；本機備份不是異地備份。
+- **回復：**在乾淨工作目錄使用 git switch -c restore-before-rfid baseline-before-rfid-20261006；需部署時以此版本覆蓋裝置檔案，私人配置另從本機備份取回。個人 VS Code 設定不由 Git 恢復。
+
 ## CHG-20261005-003｜納入教學文件與公開範例，推送 GitHub
 
 - **類別：**需求變更。

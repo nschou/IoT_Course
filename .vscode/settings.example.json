@@ -1,0 +1,10 @@
+{
+    "python.languageServer": "Pylance",
+    "python.analysis.stubPath": "./typings",
+    "python.analysis.extraPaths": [
+        "./lib"
+    ],
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingModuleSource": "none"
+    }
+}

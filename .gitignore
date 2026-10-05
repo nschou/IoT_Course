@@ -23,3 +23,8 @@ Thumbs.db
 
 # Local history backups
 *.bundle
+
+# Machine-specific settings, local firmware stubs and private recovery copies
+/.vscode/settings.json
+/typings/
+/.local-backups/
