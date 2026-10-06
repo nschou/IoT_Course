@@ -16,6 +16,15 @@
 
 Git commit hash 由歷史查詢取得；不要求把包含本紀錄的 commit hash 寫回本紀錄，避免自我引用。既有程式中的 v1.1.x／v1.2 註解不是統一的專案版本，本次開始以 Git commit 與後續 tag 作為版本依據。
 
+## CHG-20261006-009｜修正舊裝置配置導致感測器匯入失敗
+
+- **類別：**BUG。
+- **日期／開始紀錄時間：**2026-10-06 10:05:08 +08:00。
+- **現象／原因：**使用者回報 hardware/sensors.py 載入 LightSensor 時缺少 LIGHT_ALERT_TRIGGER_ADC。方法預設參數直接引用 config 屬性，會在定義類別時求值；裝置尚未新增參數或使用舊配置，就在 main 初始化前發生 AttributeError。光照任務的 getattr 預設值無法補救更早的類別匯入錯誤。
+- **作法：**is_dark/is_bright 的預設 threshold 改為 None，在實際呼叫時才用 getattr 讀配置，缺少鍵時分別使用 1000／1100；顯式 threshold 仍優先，保留原本 <／> 判斷。未改私人 WiFi 或警示控制規則。
+- **驗證：**新增實際載入 sensors 模組的舊配置回歸測試，覆蓋缺少新鍵仍可匯入、預設閾值、顯式參數與動態配置；本次17個Python測試全部通過。桌面 fake ADC，不是 ESP32 實機驗證。
+- **部署／回復：**重新上傳 hardware/sensors.py 後重啟；仍建議同步更新裝置 config.py 的 LIGHT_ALERT_*，確保自訂閾值生效，保留私人 WiFi。若撤回此修正，必須先補齊新參數才能避免相同匯入錯誤。本次本地 feature/light-led-alert 提交，未合併或推送。
+
 ## CHG-20261006-008｜光照紅閃五次與 LED 操作完整性
 
 - **類別：**需求變更。

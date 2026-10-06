@@ -74,18 +74,22 @@ class LightSensor:
             print(f"光感測器讀取錯誤: {e}")
             return self.current_value
     
-    def is_dark(self, threshold=config.LIGHT_ALERT_TRIGGER_ADC):
+    def is_dark(self, threshold=None):
         """
         判斷環境是否黑暗
         返回: True 表示黑暗，False 表示明亮
         """
+        if threshold is None:
+            threshold = getattr(config, 'LIGHT_ALERT_TRIGGER_ADC', 1000)
         return self.read() < threshold
     
-    def is_bright(self, threshold=config.LIGHT_ALERT_RESET_ADC):
+    def is_bright(self, threshold=None):
         """
         判斷環境是否明亮
         返回: True 表示明亮，False 表示黑暗
         """
+        if threshold is None:
+            threshold = getattr(config, 'LIGHT_ALERT_RESET_ADC', 1100)
         return self.read() > threshold
     
     def get_brightness_percent(self):
