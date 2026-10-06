@@ -17,6 +17,7 @@ except ImportError:
     import json
 from hardware.rfid import new_rfid_state
 from hardware.motion import new_motion_state
+from hardware.led import LedBusyError
 
 # ==================== 全局變數 ====================
 
@@ -157,7 +158,11 @@ async def api_data(request):
     # 序列化保證 None -> null，錯誤訊息中的引號也會正確跳脫。
     response_json = json.dumps({
         'temp': temp, 'humidity': humidity, 'light': light,
-        'status': 'ok', 'rfid': dict(rfid_state), 'motion': dict(motion_state)
+        'status': 'ok', 'rfid': dict(rfid_state), 'motion': dict(motion_state),
+        'led': {'alert_active': rgb_led.alert_active if rgb_led else False,
+                'available': rgb_led is not None,
+                'color_index': rgb_led.current_color_index if rgb_led else None,
+                'is_on': rgb_led.is_on if rgb_led else False}
     })
     
     #print(f"[Web] API 返回: 溫度={temp}, 濕度={humidity}, 光照={light}")
@@ -174,17 +179,17 @@ async def api_led_toggle(request):
     print("[Web] POST /api/led/toggle")
     
     try:
-        if rgb_led:
-            # 調用 rgb_led 的切換方法
-            # 假設 rgb_led 有一個 toggle() 方法或類似的方法 next_color()
-            if hasattr(rgb_led, 'next_color'):
-                rgb_led.next_color()
-            else:
-                print("[Web] ⚠️ RGB LED 無 next_color 方法")
+        if rgb_led is None:
+            return Response(json.dumps({'status': 'error', 'message': 'LED 未初始化'}),
+                            status_code=503, headers={'Content-Type': 'application/json; charset=utf-8'})
+        rgb_led.next_color()  # 控制器統一檢查，舊網頁也不能繞過
         
         response_json = '{"status": "ok", "message": "LED next_color"}'
         return Response(response_json, headers={'Content-Type': 'application/json; charset=utf-8'})
     
+    except LedBusyError as e:
+        return Response(json.dumps({'status': 'busy', 'message': str(e)}),
+                        status_code=409, headers={'Content-Type': 'application/json; charset=utf-8'})
     except Exception as e:
         print(f"[Web] LED 切換異常: {e}")
         response_json = f'{{"status": "error", "message": "{str(e)}"}}'

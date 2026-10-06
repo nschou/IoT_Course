@@ -16,6 +16,54 @@
 
 Git commit hash 由歷史查詢取得；不要求把包含本紀錄的 commit hash 寫回本紀錄，避免自我引用。既有程式中的 v1.1.x／v1.2 註解不是統一的專案版本，本次開始以 Git commit 與後續 tag 作為版本依據。
 
+## CHG-20261006-008｜光照紅閃五次與 LED 操作完整性
+
+- **類別：**需求變更。
+- **日期／開始時間：**2026-10-06 09:51:01 +08:00。
+- **測試與文件紀錄時間：**2026-10-06 09:59:16 +08:00。
+- **實作狀態：**本地 feature/light-led-alert 分支；桌面測試通過，尚未 ESP32 實機確認、合併或推送。
+
+### 需求、討論與最終決策
+
+使用者要求 ADC 低於閾值時先保存 RGB LED 狀態、紅閃五次後恢復，並要求先討論同時控制與分支策略。最初提案將正常狀態與警示輸出分離：警示占用輸出，按鈕更新背景選擇，完成後顯示最新選擇。這種覆蓋機制其實可以避免綠燈插入紅閃，但使用者看不到按下的立即效果，而且完成後不再嚴格恢復原狀。
+
+使用者提出「紅燈閃了三次突然變綠，再閃兩次」會混淆，詢問五次警示是否應為 atomic operation。經討論後，使用者明確同意「警示期間拒絕改色、不排隊、完成後恢復原狀」，並要求本檔記錄討論、實作機制及替代方案優劣。上述背景更新方案未採用。
+
+最終行為：低於 1000 觸發一次，红亮／全滅各 300 ms，五次後恢復 `(色碼, 亮滅狀態)`。警示期間拒絕實體按鈕1、網頁按鈕1與 MQTT 改色；實體按鈕必須放開再重新按下。持續暗不重複，警示完成後取樣到 ADC >= 1100 才重新允許下一次低於 1000 的觸發。開機已暗亦警示一次。系統清理可中止警示並熄燈。
+
+### 如何實現 atomic 行為與資源控制
+
+1. **單一控制入口：**hardware/led.py 的一般方法 set_color_by_index、next_color、on、off、toggle 都經過 `_require_available()`。警示中丟出 LedBusyError，立即拒絕，不等待鎖、不存待執行改色命令。不是只靠網頁停用。
+2. **在通知前取得控制權：**light_sensor_task 在觸發時同步 begin_alert，保存 current_color_index 與 is_on，建立唯一 object token，再 Event.set；這段沒有 await，因此一般協程無法在檢查與取得控制權之間插入。警示任務尚未取得排程，入口也已 busy。
+3. **取樣與閃爍分離：**main 建立獨立 light_alert_event，將光照取樣與警示任務加入 gather。取樣保持50 ms；警示任務 wait/clear 後取 token，紅亮／熄滅各 await 300 ms。RFID、PIR音樂、按鈕、Web、MQTT仍可取得排程。
+4. **不污染正常狀態：**alert_step 只寫 GPIO，紅色為索引4，全滅為0，不改正常色碼／is_on。五次正常完成、普通例外或取消都由 finally/end_alert 恢復快照後才釋放 token。原本關燈時恢復熄滅並保留原選定色碼。
+5. **關機優先：**main 使用 shutdown，使 token 失效、清除快照並永久熄燈。晚到的警示步驟或 finally 先檢查 token，不再恢復舊顏色。不是讓一般 off 繞過警示封鎖。
+6. **實體輸入消耗：**Button.wait_press 新增 reject_if，最初讀到按下與去彈跳期間記住 press_rejected；即使警示在去彈跳途中結束，仍拒絕該次按下。button1_task 保留 wait_release，不因警示完成後仍按住而補執行。控制器的最終檢查仍封鎖警示於呼叫前開始的競爭情況。
+7. **Web／MQTT回應：**/api/data 加入 led.alert_active、available、正常色碼與is_on，網頁每秒刷新停用LED按鈕並提示警示中。POST直接呼叫控制器，忙碌回HTTP409，即使舊頁面、刷新延遲或其他客戶端亦無法繞過。MQTT改色分支捕捉同一錯誤並記錄未執行、不排隊；未做broker端到端測試。
+8. **遲滯與RAM：**armed只在警示結束後且讀到解除閾值才重設；警示中亮暗交替不排隊。快照、token、Event、armed都在RAM，重啟清空，不寫Flash。配置同步至私人config.py與公開config.example.py，不修改WiFi秘密。
+
+這裡的 atomic 是應用層排他控制與可見操作完整性，不是三秒內禁止排程，也不是硬體三個GPIO同時切換。保證前提為所有一般LED操作經同一物件、單一uasyncio迴圈、同步檢查／寫入無await；新增執行緒、IRQ或直接寫GPIO需另設同步。取消、例外與關機允許中止五次序列，不能宣稱故障時也必定完成五次。
+
+### 替代方案與優劣（以下未採用者皆僅提案）
+
+| 方案 | 優點 | 缺點／決策 |
+|---|---|---|
+| 忙碌立即拒絕、不排隊 | 警示完整、恢復原狀、記憶體小、操作結果明確 | 約3秒不能改色，需提示；本次實作 |
+| 紅閃覆蓋＋保存最新使用者意圖 | 不插入綠燈，也不丟掉最後選擇 | 按下無即時反應，完成後不恢復原狀；討論後否決 |
+| FIFO排隊改色 | 每個命令都可稍後執行 | 延遲後突然連續換色，需上限／過期／回應設計；否決 |
+| await互斥鎖 | 可協調共用資源 | 會等待並延後執行，違反不排隊；鎖本身不決定UX／優先權；否決 |
+| 手動操作優先並中止紅閃 | 立即反應 | 五次警示可能不完整，需取消與恢復政策；否決 |
+| 不協調直接写GPIO | 程式最少 | 紅／綠交錯、狀態恢復競爭，不符合需求；否決 |
+| 單一LED工作任務＋命令佇列 | 可擴充多種效果／優先權 | 改造較大，仍需設計忙碌拒絕、佇列與取消；未實作，未來效果增加可考慮 |
+
+### 影響、驗證與部署／回復
+
+- **配置變更：**移除旧 LIGHT_AUTO_CONTROL_ENABLED 與 LIGHT_THRESHOLD_ON/OFF，用 LIGHT_ALERT_ENABLED、LIGHT_ALERT_TRIGGER_ADC、LIGHT_ALERT_RESET_ADC、LIGHT_ALERT_BLINK_COUNT、LIGHT_ALERT_ON_MS、LIGHT_ALERT_OFF_MS 取代自動亮滅模式；sensors輔助方法同步新閾值。保留 LIGHT_POLL_INTERVAL_MS=50。
+- **測試：**16個Python測試與網頁JavaScript模擬測試通過，涵蓋五次輸出序列、亮／滅快照恢復、所有一般方法拒絕、去彈跳期間拒絕、實體按下消耗、HTTP409、防止排隊、閾值邊界／遲滯、取消清理與shutdown阻止晚到恢復；LED／RFID／PIR回歸通過。網頁驗證停用、409競爭時機、恢復可用及斷線。未ESP32實機、實際時序、broker或瀏覽器布局驗證。
+- **限制：**ADC閾值仍需實際校準；原LightSensor讀取失敗可能返回上次值，未新增量測健康判斷；網頁停用通常有約一秒延遲，後端拒絕才是權威。若對GPIO直接寫值或硬體故障，軟體閘門不能保證輸出。
+- **文件／部署：**LIGHT_LED_ALERT_GUIDE.md 詳述機制與替代方案。上傳main、tasks、web_server、index.html及hardware/led、button、sensors，更新装置私人config.py的新參數後重啟刷新，勿以公開範本覆蓋WiFi。
+- **版本回復：**保留 pir-music-web-validated-20261006 基線，乾淨工作目錄建立回復分支再部署。Git不恢復私人config.py；回到舊版sensors時須一併恢復該版LIGHT_THRESHOLD_ON/OFF與LIGHT_AUTO_CONTROL_ENABLED=False，WiFi秘密另保留。本次提交本地功能分支，待使用者實機确认才合併／推送。
+
 ## CHG-20261006-007｜發布使用者確認正常的 PIR 音樂與網頁版本
 
 - **類別：**需求變更（版本發布與驗證紀錄）。

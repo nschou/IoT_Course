@@ -11,9 +11,19 @@ ids.forEach(id => elements[id] = { textContent: '', style: {} });
 let fail = false;
 let rfid = {status: 'ready', last_uid: '0102030404', last_read_at: '2026-10-06 00:30:00', error: null};
 let motion = {sensor_status: 'ready', detected: false, count: 0, last_detected_at: null, music_status: 'idle'};
+let led = {available: true, alert_active: false};
+let posts = 0;
+let postStatus = 200;
 const context = vm.createContext({
     document: { getElementById(id) { assert.ok(elements[id], `Missing element ${id}`); return elements[id]; } },
-    fetch: async () => { if (fail) throw Error('offline'); return {ok: true, json: async () => ({temp: 0, humidity: 0, light: 0, rfid, motion})}; },
+    fetch: async (url, options) => {
+        if (fail) throw Error('offline');
+        if (options?.method === 'POST') {
+            posts++;
+            return {ok: postStatus === 200, status: postStatus};
+        }
+        return {ok: true, json: async () => ({temp: 0, humidity: 0, light: 0, rfid, motion, led})};
+    },
     setInterval() {}, alert() {}, console: {log() {}, error() {}}
 });
 (async () => {
@@ -22,6 +32,25 @@ const context = vm.createContext({
     assert.equal(elements.rfidUid.textContent, '0102030404');
     assert.equal(elements.lightCard.textContent, 0);
     assert.equal(elements.tempCard.textContent, 0);
+    assert.equal(elements.ledButton.disabled, false);
+    led.alert_active = true;
+    await context.updateData();
+    assert.equal(elements.ledButton.disabled, true);
+    assert.match(elements.ledAlertStatus.textContent, /紅燈警示中/);
+    await context.toggleLED();
+    assert.equal(posts, 0);
+    led.alert_active = false;
+    await context.updateData();
+    postStatus = 409; // A warning begins after the last browser refresh.
+    await context.toggleLED();
+    assert.equal(posts, 1);
+    assert.equal(elements.ledButton.disabled, true);
+    assert.match(elements.ledAlertStatus.textContent, /紅燈警示中/);
+    postStatus = 200;
+    await context.updateData();
+    await context.toggleLED();
+    assert.equal(posts, 2);
+    assert.equal(elements.ledButton.disabled, false);
     assert.equal(elements.motionMessage.textContent, '等待移動');
     assert.equal(elements.motionCount.textContent, 0);
     motion = {...motion, detected: true, count: 1, last_detected_at: '2026-10-06 02:41:04', music_status: 'playing'};
@@ -42,6 +71,7 @@ const context = vm.createContext({
     fail = true;
     await context.updateData();
     assert.equal(elements.status.textContent, '🔴 連接失敗');
+    assert.equal(elements.ledButton.disabled, true);
     assert.equal(elements.musicStatus.textContent, '連接失敗，狀態未知');
     fail = false;
     await context.updateData();

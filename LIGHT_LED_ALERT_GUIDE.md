@@ -1,0 +1,71 @@
+# 光照紅燈警示：操作完整性與控制權
+
+本版在 `feature/light-led-alert` 本地開發，尚未合併或推送。桌面測試已通過，尚待 ESP32 實機驗證。
+
+## 操作規則與討論結論
+
+ADC 嚴格低於 1000 時，保存 LED 正常色碼與亮滅狀態，紅亮 300 ms、全滅 300 ms，重複五次，約 3 秒後恢復。持續偏暗只警示一次；警示結束後讀到 ADC >= 1100 才重新允許下一次低於 1000 的警示。開機已偏暗會觸發一次。警示期間跨越亮／暗閾值不累積待播警示。
+
+討論最初提出「紅燈警示覆蓋輸出，但接受改色並更新背景選擇，結束顯示最新選擇」。此作法可以避免真的插入綠燈，卻讓使用者按了按鈕看不到立即反應，且不再嚴格恢復原先狀態。使用者提出「紅閃 3 次、變綠、再紅閃 2 次」的混淆問題，要求將五次閃爍視為 atomic operation，最後確認：完整警示期間拒絕一般改色、不排隊、完成後恢復原狀。
+
+這裡 atomic 的意思是應用層控制權完整：一般操作不能插入警示、正常狀態不被改寫。不是 CPU 的一条原子指令、資料庫交易，也不是把三個 GPIO 同時硬體切換；亮滅各次更新仍依序寫 GPIO。不可用停用中斷或同步 sleep 阻塞全系統 3 秒。例外／取消與系統關閉可中止五次序列，清理時優先安全熄燈。
+
+## 為何不用等待式鎖
+
+若按鈕呼叫 `await lock.acquire()` 等待警示完成，按下操作會被延後執行，違反「拒絕、不排隊」。本版用同步忙碌檢查與擁有者 token：busy 時立即拒絕，沒有等待改色佇列。
+
+保證的前提是所有一般 GPIO 控制都經過同一個 `RgbLed`，在目前單一 `uasyncio` 事件迴圈執行。同步檢查和寫入之间沒有 await，其他協程不能在中間插入；若日後加入執行緒、IRQ 或直接操作 LED Pin，必須重新設計同步機制。Python 的私有命名只是介面約定，不是權限隔離。
+
+## 呼叫鏈與狀態生命週期
+
+1. `main()` 建立 `light_alert_event`，將同一 LED 與 Event 交給 `light_sensor_task()`、`light_alert_task()`。
+2. 光照任務每 50 ms 讀 ADC。局部 `armed=True` 表示允許觸發；閾值符合且 LED 無警示時，同步呼叫 `rgb_led.begin_alert()`。
+3. `begin_alert()` 先檢查控制權，再保存 `(current_color_index, is_on)` 至 `_saved_state`，建立 `_alert_token=object()`。`alert_active` 立即為 true。這些操作及接著的 `alert_event.set()` 沒有 await，所以在閃爍任務真正取得排程之前，改色入口已被封鎖。`armed` 改 false。
+4. 警示任務 `await event.wait()`，收到後 clear Event，取當次 token。依配置重複 `alert_step(token, True)`、await 300 ms、`alert_step(token, False)`、await 300 ms 五次。
+5. `alert_step()` 檢查 token 身分與關機狀態，僅寫實際 GPIO。紅色索引 4（100），全滅 0；不更動正常色碼與 is_on，避免按鈕 0～7 循環被警示本身污染。
+6. `finally` 呼叫 `end_alert(token)`。仍是有效擁有者時，亮燈恢復色碼，熄燈恢復 0，但保留原選定色碼；恢復後才釋放快照與 token，重新接受改色。普通取消／例外也走此路徑。
+7. `main()` 清理用 `shutdown()`，而不是一般 off：設永久關機旗標、使 token 失效、清除快照並熄燈。晚到的 `alert_step/end_alert` 不再寫 GPIO，不會在關機後恢復顏色。下次程式重啟建立新物件。
+
+正常色碼、快照、token、Event 與 armed 都只在 RAM，不寫 Flash。警示期間取樣持續，但不重新允許或排隊警示；完成後只有再次取樣到解除閾值才 rearm。閾值1000／1100形成遲滯，避免在邊界附近反覆閃爍，仍需按實際光感測器校準。
+
+`LightSensor.read()` 與原版一樣，量測失敗時可能回傳上次值；本功能不新增 ADC 健康判斷。閃爍時間是非同步等待的設定值，受其他協程影響，非硬體精準 3 秒。
+
+## 各操作入口
+
+| 入口 | 警示期間的處理 |
+|---|---|
+| 實體按鈕1 | `wait_press(reject_if=...)` 在最初按下與去彈跳期間記住 press_rejected。任務拒絕該次操作，但仍 await wait_release 消耗按下，直到放開後再按才執行。最後 `next_color()` 的控制器檢查仍防止警示開始的競爭時機。 |
+| 網頁按鈕1 | 每秒 `/api/data` 取得 led.alert_active，停用按鈕並顯示「紅燈警示中」。輪詢會延遲，故停用只屬使用者提示，不能作為唯一控制保障。 |
+| POST /api/led/toggle | 直接呼叫同一控制器；busy 時回 HTTP 409 與 JSON status=busy，不更改色碼、不排隊。舊頁面、其他客戶端及刷新間隙的請求亦受此檢查。LED 未初始化回 503。 |
+| MQTT 改色處理 | `set_color_by_index()` 同樣會拒絕，處理分支記錄未執行、不排隊；本次未做 broker 端到端驗證。 |
+| 系統清理 | `shutdown()` 優先，允許中止警示並熄滅。 |
+
+前端若資料連接失敗，停用 LED 按鈕並標示狀態未知。伺服器 busy 回覆後保持停用，下一次資料刷新且警示已結束才重新啟用。正常色碼／is_on API 表示保存的正常狀態，警示時並非當下红亮／全滅的 GPIO 值。
+
+## 替代方案與優劣
+
+| 方案 | 優點 | 缺點與本次是否採用 |
+|---|---|---|
+| 警示期間立即拒絕、不排隊 | 五次序列完整、恢復原狀；操作結果明確且記憶體小 | 約 3 秒無法改色，需要提示；本次採用 |
+| 警示覆蓋，保存最後改色意圖 | 紅閃不中斷；最後選擇不丟失 | 按下無立即視覺反應，完成後不恢復原狀；未採用 |
+| FIFO 排隊、警示後逐一執行 | 每個指令都有機會執行 | 延遲、可能突然連續換色，需要佇列上限與過期策略；未採用 |
+| 等待式 mutex／Lock | 可協調共同資源，不必每次立即拒絕 | await 鎖會延後改色，違反本次不排隊語義；鎖本身不定義 UX、優先權及取消政策；未採用 |
+| 手動操作優先，中止紅閃 | 使用者可立即掌控 LED | 五次警示可能不完整，需說明中止並防止保存狀態覆蓋新操作；未採用 |
+| 任意操作直接寫 GPIO | 程式最少 | 紅／綠插入混淆、恢復競爭；不可滿足需求 |
+| 單一 LED 工作任務＋命令佇列 | 控制權集中，可擴充警示優先權、取消與多種效果 | 要設計忙碌拒絕、佇列、回應及期限，改造幅度較大；若效果持續增加可考慮，尚未實作 |
+
+## 部署、測試與恢復
+
+需上傳 `main.py`、`tasks.py`、`web_server.py`、`index.html`、`hardware/led.py`、`hardware/button.py`、`hardware/sensors.py`，並更新裝置私人 `config.py` 的非機密配置。公開範本同步新增：LIGHT_ALERT_ENABLED=True、TRIGGER_ADC=1000、RESET_ADC=1100、BLINK_COUNT=5、ON_MS=300、OFF_MS=300；實際完整名稱帶 LIGHT_ALERT_ 前綴。舊 LIGHT_AUTO_CONTROL_ENABLED 與 LIGHT_THRESHOLD_ON/OFF 已移除，新功能取代舊的自動亮滅模式。不要以公開 WiFi placeholder 覆蓋私人設定。重啟載入新 HTML 快取，再刷新瀏覽器。
+
+實機驗收：先選藍色，再遮光確認紅閃五次恢復藍；警示中按實體／網頁按鈕確認不變色且不延後執行；放開後重新按確認可改色；原先熄滅時警示完成也熄滅；持續暗不重複，變亮到1100以上後再遮暗可重觸發；期間刷 RFID、觸發 PIR 音樂、網頁刷新皆應繼續。中斷時確認熄燈。
+
+16 個 Python 與網頁 JavaScript 模擬測試通過；涵蓋五次輸出、正常／熄滅恢復、忙碌拒絕、HTTP409、去彈跳期間記住拒絕、hysteresis、無警示佇列、取消清理與 shutdown 防止晚到恢復，以及網頁停用／409／重新啟用。這些不是 ESP32 GPIO、實際時間與瀏覽器布局驗證。
+
+回復到原已確認的功能，乾淨工作目錄可執行：
+
+```powershell
+git switch -c restore-before-light-alert pir-music-web-validated-20261006
+```
+
+再部署原應用檔案。Git 不恢復私人 config.py；舊版 hardware/sensors.py 引用舊 LIGHT_THRESHOLD_ON/OFF，回復時需從該版 config.example.py 恢復這些非機密設定及 LIGHT_AUTO_CONTROL_ENABLED=False，保留私人 WiFi。

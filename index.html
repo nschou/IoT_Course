@@ -121,6 +121,8 @@
         .btn-primary:active {
             transform: scale(0.98);
         }
+
+        button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
         
         .status {
             background: #f0f0f0;
@@ -245,10 +247,12 @@
         </div>
 
         <div class="buttons">
-            <button class="btn-primary" onclick="toggleLED()">按鈕 1: 切換 LED</button>
+            <button id="ledButton" class="btn-primary" onclick="toggleLED()" disabled>按鈕 1: 切換 LED</button>
             <button class="btn-primary" onclick="publishData()">按鈕 2: 發布數據</button>
         </div>
         
+        <p id="ledAlertStatus" role="status" aria-live="polite">LED 狀態載入中</p>
+
         <footer>
             <p>📡 實時數據刷新 | 🔄 每1秒更新一次</p>
             <p>IoT Web Server System v1.2 - 由 Microdot 提供支持</p>
@@ -256,12 +260,19 @@
     </div>
     
     <script>
+        function showLedStatus(led) {
+            document.getElementById('ledButton').disabled = !led.available || Boolean(led.alert_active);
+            document.getElementById('ledAlertStatus').textContent = led.alert_active
+                ? '紅燈警示中：閃爍 5 次，改色操作暫停且不排隊'
+                : (led.available ? 'LED 可操作' : 'LED 尚未就緒');
+        }
         // 自動刷新數據
         async function updateData() {
             try {
                 const response = await fetch('/api/data');
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const data = await response.json();
+                showLedStatus(data.led || {});
                 
                 // 更新溫度
                 const temp = data.temp ?? '--';
@@ -308,18 +319,28 @@
                 document.getElementById('rfidStatus').textContent = '連接失敗，顯示上次資料';
                 document.getElementById('motionMessage').textContent = '連接失敗，顯示上次資料';
                 document.getElementById('musicStatus').textContent = '連接失敗，狀態未知';
+                document.getElementById('ledButton').disabled = true;
+                document.getElementById('ledAlertStatus').textContent = '連接失敗，LED 狀態未知';
             }
         }
         
         // 切換 LED
         async function toggleLED() {
+            if (document.getElementById('ledButton').disabled) return;
+            document.getElementById('ledButton').disabled = true;
             try {
                 const response = await fetch('/api/led/toggle', { method: 'POST' });
                 if (response.ok) {
                     console.log('LED 已切換');
+                    await updateData();
+                } else if (response.status === 409) {
+                    showLedStatus({available: true, alert_active: true});
+                } else {
+                    document.getElementById('ledAlertStatus').textContent = 'LED 操作失敗，HTTP ' + response.status;
                 }
             } catch (error) {
                 console.error('LED 控制失敗:', error);
+                document.getElementById('ledAlertStatus').textContent = 'LED 操作失敗，請檢查連接';
             }
         }
         

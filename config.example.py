@@ -37,9 +37,12 @@ RFID_CS_PIN = 13
 # ==================== 感測器參數 ====================
 
 # 光感測器閾值
-LIGHT_AUTO_CONTROL_ENABLED = False  # 預設由按鈕／網頁控制 LED，保持選定顏色
-LIGHT_THRESHOLD_ON = 1000      # 亮度低於此值，點亮 LED
-LIGHT_THRESHOLD_OFF = 1100     # 亮度高於此值，熄滅 LED
+LIGHT_ALERT_ENABLED = True
+LIGHT_ALERT_TRIGGER_ADC = 1000  # 嚴格低於此值觸發一次
+LIGHT_ALERT_RESET_ADC = 1100    # 回升至此值以上才允許下一次
+LIGHT_ALERT_BLINK_COUNT = 5
+LIGHT_ALERT_ON_MS = 300
+LIGHT_ALERT_OFF_MS = 300
 LIGHT_POLL_INTERVAL_MS = 50    # 光感測輪詢間隔
 
 # DHT11 量測間隔

@@ -125,6 +125,7 @@ async def main():
     # 建立任務間通訊事件
     publish_event = uasyncio.Event()
     motion_event = uasyncio.Event()
+    light_alert_event = uasyncio.Event()
     motion_state = new_motion_state()
     motion_state['sensor_status'] = 'ready' if pir_sensor is not None else 'unavailable'
     motion_state['music_status'] = 'idle' if speaker is not None else 'unavailable'
@@ -149,7 +150,8 @@ async def main():
             
             # 感測器讀取任務
             tasks.dht11_read_task(dht_sensor),
-            tasks.light_sensor_task(light_sensor, rgb_led),
+            tasks.light_sensor_task(light_sensor, rgb_led, light_alert_event),
+            tasks.light_alert_task(rgb_led, light_alert_event),
             tasks.rfid_read_task(rfid_reader, rfid_state),
             tasks.pir_monitor_task(pir_sensor, motion_event, motion_state),
             tasks.music_on_motion_task(speaker, motion_event, motion_state),
@@ -166,18 +168,19 @@ async def main():
     
     except KeyboardInterrupt:
         print("\n[Main] 程式被使用者中斷")
-        rgb_led.off()
+        rgb_led.shutdown()
     
     except Exception as e:
         print(f"\n[Error] 主程式異常: {e}")
         print("[Error] 進行緊急清理...")
-        rgb_led.off()
+        rgb_led.shutdown()
         try:
             await mqtt_manager.disconnect()
         except:
             pass
         raise
     finally:
+        rgb_led.shutdown()
         if speaker is not None:
             speaker.deinit()
 

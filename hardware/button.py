@@ -21,8 +21,9 @@ class Button:
         self.pin = Pin(pin_num, Pin.IN, Pin.PULL_UP)
         self.pin_num = pin_num
         self.is_pressed = False
+        self.press_rejected = False
     
-    async def debounce_read(self, debounce_ms=config.BUTTON_DEBOUNCE_MS):
+    async def debounce_read(self, debounce_ms=config.BUTTON_DEBOUNCE_MS, reject_if=None):
         """
         非同步去彈跳讀取按鈕狀態
         連續檢測 debounce_ms 毫秒內的穩定狀態
@@ -37,6 +38,8 @@ class Button:
         checks_needed = debounce_ms
         
         while stable_count < checks_needed:
+            if reject_if is not None and reject_if():
+                self.press_rejected = True
             new_state = self.pin.value()
             
             if new_state == current_state:
@@ -52,7 +55,7 @@ class Button:
         # 返回最終穩定狀態（0 = 按下，1 = 釋放）
         return current_state == 0
     
-    async def wait_press(self):
+    async def wait_press(self, reject_if=None):
         """
         等待按鈕被按下（非同步）
         返回: 按下時的時間戳
@@ -60,8 +63,9 @@ class Button:
         while True:
             # 輪詢按鈕狀態
             if self.pin.value() == 0:  # 按下（低電位）
+                self.press_rejected = bool(reject_if is not None and reject_if())
                 # 執行非同步去彈跳
-                is_pressed = await self.debounce_read()
+                is_pressed = await self.debounce_read(reject_if=reject_if)
                 if is_pressed:
                     self.is_pressed = True
                     return True

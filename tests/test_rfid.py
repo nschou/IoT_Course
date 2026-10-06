@@ -84,7 +84,8 @@ class RfidTests(unittest.TestCase):
     def test_api_serializes_cache_null_zero_and_quotes(self):
         sys.path.insert(0, str(ROOT / 'lib'))
         try:
-            with patch.dict(sys.modules, {'network': types.ModuleType('network'), 'uasyncio': asyncio}):
+            with patch.dict(sys.modules, {'network': types.ModuleType('network'), 'uasyncio': asyncio,
+                                             'machine': types.SimpleNamespace(Pin=lambda *args: None)}):
                 spec = importlib.util.spec_from_file_location('web_rfid_test', ROOT / 'web_server.py')
                 web = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(web)

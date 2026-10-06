@@ -49,10 +49,11 @@ class LedControlTests(unittest.TestCase):
                 del sys.modules['machine']
             else:
                 sys.modules['machine'] = original
-        self.original_auto = config.LIGHT_AUTO_CONTROL_ENABLED
+        self.module = module
+        self.original_enabled = config.LIGHT_ALERT_ENABLED
 
     def tearDown(self):
-        config.LIGHT_AUTO_CONTROL_ENABLED = self.original_auto
+        config.LIGHT_ALERT_ENABLED = self.original_enabled
 
     def output(self):
         return (self.led.red.value() << 2) | (self.led.green.value() << 1) | self.led.blue.value()
@@ -65,10 +66,10 @@ class LedControlTests(unittest.TestCase):
         exec(compile(ast.Module(body=[task], type_ignores=[]), 'tasks.py', 'exec'), namespace)
         sensor = types.SimpleNamespace(read=lambda: brightness)
         with self.assertRaises(StopCycle):
-            asyncio.run(namespace['light_sensor_task'](sensor, self.led))
+            asyncio.run(namespace['light_sensor_task'](sensor, self.led, asyncio.Event()))
 
     def test_button_colors_survive_light_polling_and_wrap(self):
-        self.assertFalse(config.LIGHT_AUTO_CONTROL_ENABLED)
+        config.LIGHT_ALERT_ENABLED = False
         for expected in [1, 2, 3, 4, 5, 6, 7, 0, 1]:
             self.assertEqual(self.led.next_color(), expected)
             for brightness in [2000, 500, 1050]:
@@ -76,16 +77,16 @@ class LedControlTests(unittest.TestCase):
                 self.assertEqual(self.led.current_color_index, expected)
                 self.assertEqual(self.output(), expected)
 
-    def test_auto_off_preserves_color_and_dark_restores_it(self):
-        config.LIGHT_AUTO_CONTROL_ENABLED = True
+    def test_alert_restores_saved_off_state(self):
         self.led.set_color_by_index(4)
-        self.poll_light(2000)
+        self.led.off()
+        token = self.led.begin_alert()
+        self.led.alert_step(token, True)
+        self.assertEqual(self.output(), 4)
+        self.led.end_alert(token)
         self.assertEqual(self.output(), 0)
         self.assertEqual(self.led.current_color_index, 4)
         self.assertFalse(self.led.is_on)
-        self.poll_light(500)
-        self.assertEqual(self.output(), 4)
-        self.assertTrue(self.led.is_on)
 
     def test_toggle_restores_selected_color(self):
         self.led.set_color_by_index(6)
