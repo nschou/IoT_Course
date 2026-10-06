@@ -1,6 +1,6 @@
 # 光照紅燈警示：操作完整性與控制權
 
-本版在 `feature/light-led-alert` 本地開發，尚未合併或推送。桌面測試已通過，尚待 ESP32 實機驗證。
+本版由 `feature/light-led-alert` 開發，2026-10-06 使用者確認紅閃五次相關功能與觸發時機測試正確，授權合併至 `main` 並推送；以 `light-led-alert-validated-20261006` 標籤保存。此确认仅针对红闪功能，不代表全系統效能已驗證。
 
 ## 操作規則與討論結論
 
@@ -69,3 +69,18 @@ git switch -c restore-before-light-alert pir-music-web-validated-20261006
 ```
 
 再部署原應用檔案。Git 不恢復私人 config.py；舊版 hardware/sensors.py 引用舊 LIGHT_THRESHOLD_ON/OFF，回復時需從該版 config.example.py 恢復這些非機密設定及 LIGHT_AUTO_CONTROL_ENABLED=False，保留私人 WiFi。
+
+## 已知待觀測事項與版本保存
+
+使用者回報移動偵測、實體按鈕等功能偶有卡鈍感受，尚未詳細觀測。未取得可重現步驟、時間量測或日誌，根因與是否和本次警示有關皆未確認，也尚未修正。依使用者指示本次先保存版本，後續再調查；不宣稱所有任務即時性或系統效能已正常。
+
+最新舊配置相容修正後，17 個桌面 Python 測試通過；先前網頁 JavaScript 模擬測試通過。本次合併僅更新驗證與待觀測紀錄，未再修改應用邏輯。
+
+要取回此次紅閃確認版，可在乾淨工作目錄執行：
+
+```powershell
+git fetch origin --tags
+git switch -c restore-light-alert light-led-alert-validated-20261006
+```
+
+再部署到 ESP32，私人配置另行保留。前一個 PIR 音樂網頁確認版標籤也保留，可供後續比較；切換 Git 不會自動更新裝置 Flash。
