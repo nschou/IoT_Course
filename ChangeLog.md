@@ -16,6 +16,16 @@
 
 Git commit hash 由歷史查詢取得；不要求把包含本紀錄的 commit hash 寫回本紀錄，避免自我引用。既有程式中的 v1.1.x／v1.2 註解不是統一的專案版本，本次開始以 Git commit 與後續 tag 作為版本依據。
 
+## CHG-20261006-007｜發布使用者確認正常的 PIR 音樂與網頁版本
+
+- **類別：**需求變更（版本發布與驗證紀錄）。
+- **日期／紀錄時間：**2026-10-06 08:56:09 +08:00；使用者實際測試時間未提供。
+- **原因：**使用者確認測試都正確，明確授權合併至 GitHub。
+- **作法：**fetch 確認遠端 main 未有新增提交；更新 PIR_MUSIC_GUIDE.md 的驗證／版本狀態，提交後將 feature/pir-music 快轉合併至 main，建立帶註解標籤 pir-music-web-validated-20261006，推送 main、功能分支與標籤至既有 origin；以遠端 SHA 核對結果。
+- **驗證：**實機正確由使用者回報，未提供逐項情境紀錄，不推論所有卡片、故障情境或瀏覽器皆已驗證。先前 10 個 Python 與網頁 JavaScript 模擬測試通過，詳見 CHG-20261006-006。本次僅更新文件與版本指標，無程式邏輯變更，不重複執行既有測試。
+- **影響：**保留首次高電位／後續低→高觸發、非同步音樂、5 秒網頁提示與 RAM 次數／時間快取；私人 config.py 不上傳，公开 config.example.py 包含部署所需參數。
+- **部署／回復：**詳見 PIR_MUSIC_GUIDE.md；確認版以 pir-music-web-validated-20261006 標籤取得，整合前已確認 RFID 版仍為 rfid-validated-20261006。乾淨工作目錄使用 git switch -c restore-pir-web pir-music-web-validated-20261006 建立回復分支，再部署至 ESP32；私人配置另行保留，不使用 force push 或 reset --hard。
+
 ## CHG-20261006-006｜網頁顯示移動提示與音樂狀態
 
 - **類別：**需求變更。

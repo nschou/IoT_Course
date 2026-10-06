@@ -1,6 +1,6 @@
 # PIR 移動提示音樂：流程與部署
 
-本功能接入 `main.py`，由 PIR 偵測任務與無源喇叭播放任務協作；目前完成桌面測試，尚未做 ESP32 實機驗證。開發分支為 `feature/pir-music`，待使用者實機確認後再合併／推送。
+本功能接入 `main.py`，由 PIR 偵測任務與無源喇叭播放任務協作；桌面測試已完成，2026-10-06 使用者確認 PIR、音樂與網頁測試正確，授權合併／推送。功能分支為 `feature/pir-music`；確認版納入 `main`，並以 `pir-music-web-validated-20261006` 標籤保存。實機結果來自使用者回報，未提供逐項測試紀錄。
 
 ## 初始化與呼叫
 
@@ -43,7 +43,7 @@ git switch -c restore-rfid rfid-validated-20261006
 
 ## 故障診斷（2026-10-06 修正）
 
-序列埠會列出 PIR 與 PWM 初始化結果、實際腳位、任務啟動、PIR 電位變化，以及每 20 次取樣一次的讀值（預設約 10 秒）。若只看到 0，需確認装置 GPIO 4 接線、PIR 模組輸出及暖機；若始終為 1，首次應播放一次，之後須回到 0 才重新觸發。若看到播放開始／完成仍無聲，需以 GPIO 6 PWM 單獨測試區分喇叭與接線。這些判斷需實機日誌，尚未確認此次使用者裝置的根因。
+序列埠會列出 PIR 與 PWM 初始化結果、實際腳位、任務啟動、PIR 電位變化，以及每 20 次取樣一次的讀值（預設約 10 秒）。若只看到 0，需確認装置 GPIO 4 接線、PIR 模組輸出及暖機；若始終為 1，首次應播放一次，之後須回到 0 才重新觸發。若看到播放開始／完成仍無聲，需以 GPIO 6 PWM 單獨測試區分喇叭與接線。後續使用者確認此次無聲原因為未更新裝置 config.py，重新上傳後功能正常；以上診斷仍供日後故障排查。
 
 為相容尚未更新的裝置 config，缺少新參數時使用範例預設腳位、500 ms、512 占空比及旋律；自訂接線仍應明確配置，初始化日誌顯示的是實際使用值。
 
@@ -66,7 +66,7 @@ finally:
 
 ## 網頁移動提示（2026-10-06）
 
-使用者已確認上傳裝置 config.py 後，PIR 與音樂功能正常；此前無聲原因是未部署新配置。新增網頁功能尚待實機確認。
+使用者已確認上傳裝置 config.py 後，PIR 與音樂功能正常；此前無聲原因是未部署新配置。使用者亦已確認新增網頁測試正確。
 
 main 呼叫 hardware.motion.new_motion_state() 建立 RAM 字典，傳給兩個任務並注入 web_server.motion_state。PIR 任務更新 sensor_status、pir_high、detected、last_detected_at、count、sensor_error；音樂任務更新 music_status、music_error。各任務只更新自己負責的欄位，Web API 只複製字典、不存取 GPIO。初始化失敗以 unavailable 表示，詳細初始化錯誤見序列埠。
 
@@ -78,4 +78,15 @@ count 是偵測觸發次數，並非播放次數；播放期間事件仍合併�
 
 網頁部署還需更新 web_server.py、index.html，以及新增 hardware/motion.py；main.py 與 tasks.py 也必須一併更新，保留已正常的 sensors.py、speaker.py 和私人 config.py。重啟 ESP32 讓 HTML 快取重新載入，再刷新瀏覽器。移動後確認裝置播放且網頁出現提示，PIR 回低並滿 5 秒後恢復等待，最後時間／次數保留；同時檢查 RFID 與原有按鈕。
 
-此次 10 個 Python 測試与網頁 JavaScript 模擬測試通過，包括 tick 回繞、5 秒邊界、持續高、清除、次數／時間、播放狀態、JSON 與網頁錯誤／斷線恢復；未做新版網頁的 ESP32 實機或瀏覽器視覺檢查。
+此次 10 個 Python 測試与網頁 JavaScript 模擬測試通過，包括 tick 回繞、5 秒邊界、持續高、清除、次數／時間、播放狀態、JSON 與網頁錯誤／斷線恢復；上述是代理執行的桌面測試；新版實機正常由使用者確認，代理未另行操作 ESP32 或執行瀏覽器視覺檢查。
+
+## 已確認版本保存
+
+PIR／音樂與網頁確認版標籤為 `pir-music-web-validated-20261006`，包含實作及驗證紀錄。乾淨工作目錄可建立回復分支：
+
+```powershell
+git fetch origin --tags
+git switch -c restore-pir-web pir-music-web-validated-20261006
+```
+
+重新部署該版本應用與範本內新增的非機密配置，保留裝置私人 WiFi 設定。舊 RFID 基線標籤仍保留。
