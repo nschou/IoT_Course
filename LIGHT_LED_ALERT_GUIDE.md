@@ -1,5 +1,7 @@
 # 光照紅燈警示：操作完整性與控制權
 
+> 本講義的 token／多入口檢查機制描述已確認的舊版。`refactor/led-single-owner` 分支試驗唯一 owner 與命令仲裁，詳見 [多元控制單一LED講義](LED_SINGLE_OWNER_GUIDE.md)。兩版不可混用程式介面，這裡保留舊設計供比較。
+
 本版由 `feature/light-led-alert` 開發，2026-10-06 使用者確認紅閃五次相關功能與觸發時機測試正確，授權合併至 `main` 並推送；以 `light-led-alert-validated-20261006` 標籤保存。此确认仅针对红闪功能，不代表全系統效能已驗證。
 
 ## 操作規則與討論結論

@@ -17,7 +17,6 @@ except ImportError:
     import json
 from hardware.rfid import new_rfid_state
 from hardware.motion import new_motion_state
-from hardware.led import LedBusyError
 
 # ==================== 全局變數 ====================
 
@@ -27,7 +26,7 @@ app = Microdot()
 mqtt_manager = None
 publish_event = None
 dht_sensor = None
-rgb_led = None
+led_service = None
 light_sensor = None  # ✅ 新增光照傳感器
 rfid_state = new_rfid_state()  # main 注入同一份 RAM 狀態；API 不操作 SPI
 motion_state = new_motion_state()
@@ -159,10 +158,8 @@ async def api_data(request):
     response_json = json.dumps({
         'temp': temp, 'humidity': humidity, 'light': light,
         'status': 'ok', 'rfid': dict(rfid_state), 'motion': dict(motion_state),
-        'led': {'alert_active': rgb_led.alert_active if rgb_led else False,
-                'available': rgb_led is not None,
-                'color_index': rgb_led.current_color_index if rgb_led else None,
-                'is_on': rgb_led.is_on if rgb_led else False}
+        'led': led_service.snapshot() if led_service else
+               {'available': False, 'alert_active': False}
     })
     
     #print(f"[Web] API 返回: 溫度={temp}, 濕度={humidity}, 光照={light}")
@@ -178,22 +175,23 @@ async def api_led_toggle(request):
     """
     print("[Web] POST /api/led/toggle")
     
-    try:
-        if rgb_led is None:
-            return Response(json.dumps({'status': 'error', 'message': 'LED 未初始化'}),
-                            status_code=503, headers={'Content-Type': 'application/json; charset=utf-8'})
-        rgb_led.next_color()  # 控制器統一檢查，舊網頁也不能繞過
-        
-        response_json = '{"status": "ok", "message": "LED next_color"}'
-        return Response(response_json, headers={'Content-Type': 'application/json; charset=utf-8'})
-    
-    except LedBusyError as e:
-        return Response(json.dumps({'status': 'busy', 'message': str(e)}),
-                        status_code=409, headers={'Content-Type': 'application/json; charset=utf-8'})
-    except Exception as e:
-        print(f"[Web] LED 切換異常: {e}")
-        response_json = f'{{"status": "error", "message": "{str(e)}"}}'
-        return Response(response_json, headers={'Content-Type': 'application/json; charset=utf-8'}, status_code=500)
+    if led_service is None:
+        return Response(json.dumps({'status': 'rejected', 'reason': 'unavailable'}),
+                        status_code=503, headers={'Content-Type': 'application/json; charset=utf-8'})
+    receipt = led_service.submit('cycle', 'web')
+    status = 202 if receipt['status'] == 'accepted' else {
+        'busy': 409, 'queue_full': 429, 'stopped': 503
+    }.get(receipt['reason'], 400)
+    return Response(json.dumps(receipt), status_code=status,
+                    headers={'Content-Type': 'application/json; charset=utf-8'})
+
+
+@app.route('/api/led/commands/<int:command_id>')
+async def api_led_command_result(request, command_id):
+    receipt = led_service.result(command_id) if led_service else None
+    return Response(json.dumps(receipt or {'status': 'unknown', 'reason': 'expired_or_unknown'}),
+                    status_code=200 if receipt else 404,
+                    headers={'Content-Type': 'application/json; charset=utf-8'})
 
 
 @app.route('/api/publish', methods=['POST'])

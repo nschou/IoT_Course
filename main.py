@@ -9,6 +9,7 @@ import sys
 # 導入配置與模組
 import config
 from hardware.led import RgbLed
+from services.led_service import LedService
 from hardware.button import Button
 from hardware.sensors import Dht11Sensor, LightSensor, PirSensor
 from hardware.speaker import Speaker
@@ -41,7 +42,6 @@ async def initialize_system():
     # 1. 初始化硬體
     print("[Init] 初始化 RGB LED...")
     rgb_led = RgbLed()
-    rgb_led.on(7)  # 白色指示燈
     
     print("[Init] 初始化按鈕...")
     button1 = Button(config.BUTTON1_PIN)
@@ -125,7 +125,8 @@ async def main():
     # 建立任務間通訊事件
     publish_event = uasyncio.Event()
     motion_event = uasyncio.Event()
-    light_alert_event = uasyncio.Event()
+    led_service = LedService(rgb_led)
+    led_owner = uasyncio.create_task(led_service.run())
     motion_state = new_motion_state()
     motion_state['sensor_status'] = 'ready' if pir_sensor is not None else 'unavailable'
     motion_state['music_status'] = 'idle' if speaker is not None else 'unavailable'
@@ -134,7 +135,7 @@ async def main():
     web_server.mqtt_manager = mqtt_manager
     web_server.publish_event = publish_event
     web_server.dht_sensor = dht_sensor
-    web_server.rgb_led = rgb_led
+    web_server.led_service = led_service
     web_server.light_sensor = light_sensor
     web_server.rfid_state = rfid_state
     web_server.motion_state = motion_state
@@ -145,13 +146,13 @@ async def main():
         # 使用 asyncio.gather() 同時啟動所有任務
         await uasyncio.gather(
             # 按鈕監聽任務
-            tasks.button1_task(button1, rgb_led, publish_event),
+            tasks.button1_task(button1, led_service, publish_event),
             tasks.button2_task(button2, dht_sensor, mqtt_manager, publish_event),
             
             # 感測器讀取任務
             tasks.dht11_read_task(dht_sensor),
-            tasks.light_sensor_task(light_sensor, rgb_led, light_alert_event),
-            tasks.light_alert_task(rgb_led, light_alert_event),
+            tasks.light_sensor_task(light_sensor, led_service),
+            led_owner,
             tasks.rfid_read_task(rfid_reader, rfid_state),
             tasks.pir_monitor_task(pir_sensor, motion_event, motion_state),
             tasks.music_on_motion_task(speaker, motion_event, motion_state),
@@ -159,7 +160,7 @@ async def main():
             # 顯示與通訊任務
             tasks.oled_display_task(dht_sensor),
             tasks.mqtt_publish_task(dht_sensor, mqtt_manager, publish_event),
-            tasks.mqtt_subscribe_task(mqtt_manager, rgb_led),
+            tasks.mqtt_subscribe_task(mqtt_manager, led_service),
             
             # Web Server 任務
             web_server.web_server_task(),
@@ -168,19 +169,20 @@ async def main():
     
     except KeyboardInterrupt:
         print("\n[Main] 程式被使用者中斷")
-        rgb_led.shutdown()
+        led_service.request_stop()
     
     except Exception as e:
         print(f"\n[Error] 主程式異常: {e}")
         print("[Error] 進行緊急清理...")
-        rgb_led.shutdown()
+        led_service.request_stop()
         try:
             await mqtt_manager.disconnect()
         except:
             pass
         raise
     finally:
-        rgb_led.shutdown()
+        led_service.request_stop()
+        await led_service.wait_stopped()
         if speaker is not None:
             speaker.deinit()
 

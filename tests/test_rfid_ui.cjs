@@ -13,15 +13,18 @@ let rfid = {status: 'ready', last_uid: '0102030404', last_read_at: '2026-10-06 0
 let motion = {sensor_status: 'ready', detected: false, count: 0, last_detected_at: null, music_status: 'idle'};
 let led = {available: true, alert_active: false};
 let posts = 0;
-let postStatus = 200;
+let postStatus = 202;
+let commandStatus = 'executed';
 const context = vm.createContext({
     document: { getElementById(id) { assert.ok(elements[id], `Missing element ${id}`); return elements[id]; } },
     fetch: async (url, options) => {
         if (fail) throw Error('offline');
         if (options?.method === 'POST') {
             posts++;
-            return {ok: postStatus === 200, status: postStatus};
+            if (postStatus === 409) led.alert_active = true;
+            return {ok: postStatus === 202, status: postStatus, json: async () => ({id: 9, status: postStatus === 202 ? 'accepted' : 'rejected', reason: 'busy'})};
         }
+        if (url.startsWith('/api/led/commands/')) return {ok: true, json: async () => ({id: 9, status: commandStatus, reason: 'alert_started'})};
         return {ok: true, json: async () => ({temp: 0, humidity: 0, light: 0, rfid, motion, led})};
     },
     setInterval() {}, alert() {}, console: {log() {}, error() {}}
@@ -46,10 +49,16 @@ const context = vm.createContext({
     assert.equal(posts, 1);
     assert.equal(elements.ledButton.disabled, true);
     assert.match(elements.ledAlertStatus.textContent, /紅燈警示中/);
-    postStatus = 200;
+    postStatus = 202;
+    led.alert_active = false;
     await context.updateData();
     await context.toggleLED();
     assert.equal(posts, 2);
+    assert.match(elements.ledCommandStatus.textContent, /已執行/);
+    commandStatus = 'rejected';
+    await context.toggleLED();
+    assert.match(elements.ledCommandStatus.textContent, /rejected.*alert_started/);
+    commandStatus = 'executed';
     assert.equal(elements.ledButton.disabled, false);
     assert.equal(elements.motionMessage.textContent, '等待移動');
     assert.equal(elements.motionCount.textContent, 0);

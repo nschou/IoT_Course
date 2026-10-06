@@ -7,7 +7,6 @@ tasks.py - 非同步任務協程（修正版 v1.1.3）
 import uasyncio
 import time
 import config
-from hardware.led import RgbLed, LedBusyError
 from hardware.button import Button
 from hardware.sensors import Dht11Sensor, LightSensor
 from hardware.display import OledDisplay
@@ -16,7 +15,7 @@ from communication.wifi import get_current_time
 
 # ==================== 任務：按鈕監聽 ====================
 
-async def button1_task(button1, rgb_led, publish_event):
+async def button1_task(button1, led_service, publish_event):
     """
     按鈕 1 監聽任務
     功能：按下按鈕1時，循環切換 LED 顏色
@@ -26,17 +25,14 @@ async def button1_task(button1, rgb_led, publish_event):
 
     while True:
         try:
-            await button1.wait_press(reject_if=lambda: rgb_led.alert_active)
+            await button1.wait_press(reject_if=lambda: led_service.busy)
             print(f"[Button] 按鈕 {button_id} 被按下")
 
-            try:
-                if button1.press_rejected:
-                    raise LedBusyError('按下或去彈跳期間遇到紅燈警示')
-                next_color = rgb_led.next_color()
-                color_name = rgb_led.get_color_name(next_color)
-                print(f"[LED] 顏色改變為: {color_name} (索引: {next_color})")
-            except LedBusyError as e:
-                print(f'[Button] 按鈕1操作未執行: {e}；請放開後重新按下')
+            if button1.press_rejected:
+                print('[Button] 警示期間按下，不執行；請放開後重新按下')
+            else:
+                receipt = led_service.submit('cycle', 'button1')
+                print('[Button] LED 命令:', receipt)
 
             await button1.wait_release()
             print(f"[Button] 按鈕 {button_id} 被釋放")
@@ -175,54 +171,24 @@ async def dht11_read_task(dht_sensor):
             await uasyncio.sleep(config.DHT11_POLL_INTERVAL_SEC)
 
 
-async def light_sensor_task(light_sensor, rgb_led, alert_event):
-    """
-    光感測器讀取任務
-    持續取樣，低於閾值預約一次警示；回升至解除閾值才重新允許。
-    """
-    print("[Task] 光感測器任務已啟動")
+async def light_sensor_task(light_sensor, led_service):
+    """Hysteresis producer; no GPIO and no effect sequencing."""
+    print('[Task] 光照命令生產者已啟動')
     armed = True
-
     while True:
         try:
             brightness = light_sensor.read()
-
-            if getattr(config, 'LIGHT_ALERT_ENABLED', True) and not rgb_led.alert_active:
+            if getattr(config, 'LIGHT_ALERT_ENABLED', True) and not led_service.busy:
                 if brightness >= getattr(config, 'LIGHT_ALERT_RESET_ADC', 1100):
                     armed = True
                 elif armed and brightness < getattr(config, 'LIGHT_ALERT_TRIGGER_ADC', 1000):
-                    rgb_led.begin_alert()  # 在喚醒播放任務前就封鎖所有入口
-                    armed = False
-                    alert_event.set()
-                    print(f'[Light] ADC={brightness}，紅燈警示開始；改色操作暫停')
-
-            await uasyncio.sleep_ms(config.LIGHT_POLL_INTERVAL_MS)
+                    receipt = led_service.submit('low_light_alert', 'light')
+                    if receipt['status'] == 'accepted':
+                        armed = False
+                    print('[Light] LED 命令:', receipt)
         except Exception as e:
-            print(f"[Error] 光感測器任務異常: {e}")
-            await uasyncio.sleep_ms(config.LIGHT_POLL_INTERVAL_MS)
-
-
-async def light_alert_task(rgb_led, alert_event):
-    """完整紅閃五次，finally 恢復；警示中不接受改色指令。"""
-    while True:
-        await alert_event.wait()
-        alert_event.clear()
-        token = rgb_led.alert_token
-        if token is None:
-            continue
-        try:
-            for _ in range(getattr(config, 'LIGHT_ALERT_BLINK_COUNT', 5)):
-                if not rgb_led.alert_step(token, True):
-                    break
-                await uasyncio.sleep_ms(getattr(config, 'LIGHT_ALERT_ON_MS', 300))
-                if not rgb_led.alert_step(token, False):
-                    break
-                await uasyncio.sleep_ms(getattr(config, 'LIGHT_ALERT_OFF_MS', 300))
-        except Exception as e:
-            print(f'[Error] 紅燈警示異常: {e}')
-        finally:
-            rgb_led.end_alert(token)
-            print('[Light] 紅燈警示結束')
+            print('[Error] 光照取樣異常:', e)
+        await uasyncio.sleep_ms(config.LIGHT_POLL_INTERVAL_MS)
 
 
 # ==================== 任務：顯示更新 ====================
@@ -346,7 +312,7 @@ async def mqtt_publish_task(dht_sensor, mqtt_manager, publish_event):
 
 # ==================== 任務：MQTT 訂閱與指令處理 ====================
 
-async def mqtt_subscribe_task(mqtt_manager, rgb_led):
+async def mqtt_subscribe_task(mqtt_manager, led_service):
     """
     MQTT 訂閱與指令處理任務
     監聽 MQTT 訂閱的訊息，並根據指令控制裝置
@@ -364,11 +330,8 @@ async def mqtt_subscribe_task(mqtt_manager, rgb_led):
             if 'led' in msg_str.lower():
                 try:
                     led_value = int(msg_str.split(':')[-1].split('=')[-1].strip())
-                    rgb_led.set_color_by_index(led_value)
-                    color = rgb_led.get_color_name(led_value)
-                    print(f"[LED] 已設定為: {color}")
-                except LedBusyError as e:
-                    print(f'[MQTT Sub] 改色指令未執行、不排隊: {e}')
+                    receipt = led_service.submit('set_color', 'mqtt', led_value)
+                    print('[MQTT Sub] LED 命令:', receipt)
                 except ValueError:
                     print("[MQTT Sub] 指令解析失敗（無效索引）")
                 except Exception as e:

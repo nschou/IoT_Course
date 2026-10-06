@@ -16,6 +16,45 @@
 
 Git commit hash 由歷史查詢取得；不要求把包含本紀錄的 commit hash 寫回本紀錄，避免自我引用。既有程式中的 v1.1.x／v1.2 註解不是統一的專案版本，本次開始以 Git commit 與後續 tag 作為版本依據。
 
+## CHG-20261006-012｜單一 LED owner 與命令仲裁實驗
+
+- **類別：**需求變更（架構教學與獨立分支實驗）。
+- **日期／開始時間：**2026-10-06 23:32:51 +08:00。
+- **驗證／紀錄時間：**2026-10-06 23:46:02 +08:00。
+- **需求：**使用者要求把多元控制單一LED方案寫成講義與Mermaid圖，再切分支實作，評估理解、實作與功能穩定性。不是處理卡鈍；先前卡鈍仍待觀測。
+- **基線與狀態：**由乾淨main的88ca2fb建立refactor/led-single-owner；只本地實驗、未合併／推送。73d693f與light-led-alert-validated-20261006仍可回復已確認功能。
+
+### 討論結論與實作
+
+1. **責任集中：**新增services/led_service.py與套件__init__.py。RgbLed改為只轉色碼到GPIO且避免重複輸出；初始化安全熄燈後，正常操作与關機輸出都由唯一LedService.run流程執行。main只建立owner與提出停止，不直接寫GPIO。
+2. **生產者：**實體按鈕與Web提交cycle，光照提交low_light_alert；既有MQTT改色分支亦提交set_color以避免留下旁路，但不修改既有MQTT callback接線，也未broker實機驗證。來源不讀改寫正常色碼，不執行效果。
+3. **仲裁：**同步submit只做受理控制面，無await／GPIO；普通命令FIFO上限8。受理警示即reserved=true，將尚未執行的普通receipt改rejected/alert_started並清除，避免警示後補執行；忙碌時新改色與新警示立即拒絕、不排隊。cycle是相對變更，兩次不合併。警示先於待執行改色，已執行命令不撤銷。
+4. **雙層狀態：**正常色碼／亮滅與effect分開；effect保存phase、次數、階段時間、原狀與receipt。owner每20ms讓出排程，每輪最多4筆，使用ticks_diff推進亮滅。延遲時每輪最多一個效果轉換，不跳過肉眼可見階段，可能延長總時間。五次完成先恢復GPIO，再解除busy並標executed。
+5. **結果與生命週期：**receipt有id、kind、source、status、reason；受理副本不會自動變完成，最近16筆結果保留RAM可查，重啟清空。accepted→executing→executed；亦可能rejected、failed、cancelled。記錄可過期，查不到不等於未執行。有界清單不依賴uasyncio.Queue套件，不可從IRQ／thread直接使用。
+6. **Web：**POST既有/api/led/toggle回202與ID表示受理，而非已改色；busy409、queue_full429、停止／未初始化503。新增GET /api/led/commands/<int:command_id>；前端區分受理、執行、後續拒絕、過期与斷線未知，不等待警示完成才回HTTP。每秒狀態快照仍顯示警示忙碌並停用按鈕。
+7. **停止與錯誤：**request_stop停止受理／拒絕待處理；owner finally標未完效果cancelled、熄燈並set stopped Event。main等待owner完成清理。GPIO錯誤標failed並退出；硬體若連熄燈也失敗，不能承諾實際輸出。只有同一迴圈、經命令入口的來源才符合此所有權約定。
+8. **保持功能政策：**完整五次期間拒絕改色、按鈕須放開重按；光照armed仍需警示結束後ADC>=1100才重新允許，再ADC<1000才觸發，未加冷卻或連續確認。未採背景改色／通用搶占，維持先前確認需求。
+
+### 講義、理解成本與替代方案
+
+- 新增LED_SINGLE_OWNER_GUIDE.md，以四張圖表示要素、HTTP受理到結果、警示競爭時機與狀態機，說明參數來源、快取生命週期、仲裁表、部署與驗收。旧LIGHT_LED_ALERT_GUIDE.md加版本提示，保留token方案供比較。
+- 講義說明critical section、一致性、所有權、仲裁是互補層次；非同步for+await不阻塞整個迴圈也可取消，本次選狀態機是集中仲裁，不是將其誤當無法中斷。
+- 可讀性初步判斷：硬體與來源更簡單、責任集中；owner增加有界佇列、狀態機與結果協定，整體不一定更短，初學者需理解accepted不等於executed。是否更容易教學或實機更穩定仍需驗收，未宣稱結論已成立。
+- 未選等待式Lock（會延後操作）、背景desired更新（會不恢復原狀）與泛用優先權搶占框架（目前規則不需要）；單一owner本身不能替代仲裁政策。
+
+### 驗證與可觀察差異
+
+- **20個Python測試通過：**FIFO、兩次cycle、預約警示競爭、拒絕待執行／新命令、完整五次／熄滅恢復、tick回繞、延遲不跳階段、容量／歷史上限、取消／關機、GPIO錯誤、實際main錯誤後owner清理、真正Button去彈跳拒絕與PIR／RFID回歸。固定隨機種子1000輪混合命令加200輪收尾驗證有界與結束。以本專案Microdot TestClient驗證實際路由202、結果查詢與429，另驗證handler409／404。
+- **網頁JavaScript模擬測試通過：**受理／執行、受理後拒絕、busy停用、重啟可用以及原RFID／PIR顯示。未真實瀏覽器布局、ESP32 SPI/GPIO、broker或實機壓力驗證。
+- **Mermaid：**原暫存解析器依賴缺損，另在暫存目錄建立mermaid11.13.0+jsdom，四張圖實際解析4/4通過；未做Typora／VS Code視覺布局驗證，不增加專案執行依賴。
+- **差異：**白色7改由owner於完整初始化後首次渲染，WiFi／NTP／MQTT等待期間LED保持安全熄滅；Web受理成功從200改202；正常命令至少等待owner下一輪，不再同步完成。這些需納入實機驗收。
+
+### 部署與回復
+
+部署main.py、tasks.py、web_server.py、index.html、hardware/led.py與services整個目錄，保留已確認Button、PIR／RFID／sensors及私人config.py。本次未新增配置，既有LIGHT_ALERT_*沿用。重啟重新載入HTML。詳見新講義。
+
+實驗不推送或合併。回復git switch main後須整套部署main/tasks/web_server/index與hardware/led，不可混用舊token控制器和新owner介面；私人配置未改。旧services可留在裝置，但舊main不匯入。每次提交包含此紀錄，實際commit由Git查詢。
+
 ## CHG-20261006-011｜講義強調光照警示的重新允許条件
 
 - **類別：**需求變更（教學說明補充）。

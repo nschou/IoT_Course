@@ -252,6 +252,7 @@
         </div>
         
         <p id="ledAlertStatus" role="status" aria-live="polite">LED 狀態載入中</p>
+        <p id="ledCommandStatus" role="status" aria-live="polite"></p>
 
         <footer>
             <p>📡 實時數據刷新 | 🔄 每1秒更新一次</p>
@@ -260,8 +261,9 @@
     </div>
     
     <script>
+        let ledRequestPending = false;
         function showLedStatus(led) {
-            document.getElementById('ledButton').disabled = !led.available || Boolean(led.alert_active);
+            document.getElementById('ledButton').disabled = ledRequestPending || !led.available || Boolean(led.alert_active);
             document.getElementById('ledAlertStatus').textContent = led.alert_active
                 ? '紅燈警示中：閃爍 5 次，改色操作暫停且不排隊'
                 : (led.available ? 'LED 可操作' : 'LED 尚未就緒');
@@ -327,20 +329,40 @@
         // 切換 LED
         async function toggleLED() {
             if (document.getElementById('ledButton').disabled) return;
+            ledRequestPending = true;
             document.getElementById('ledButton').disabled = true;
             try {
                 const response = await fetch('/api/led/toggle', { method: 'POST' });
-                if (response.ok) {
-                    console.log('LED 已切換');
-                    await updateData();
-                } else if (response.status === 409) {
-                    showLedStatus({available: true, alert_active: true});
-                } else {
-                    document.getElementById('ledAlertStatus').textContent = 'LED 操作失敗，HTTP ' + response.status;
+                const receipt = await response.json();
+                if (response.status !== 202) {
+                    document.getElementById('ledCommandStatus').textContent = '操作未受理：' + (receipt.reason || response.status);
+                    return;
                 }
+                document.getElementById('ledCommandStatus').textContent = '命令 ' + receipt.id + ' 已受理，等待執行';
+                for (let attempt = 0; attempt < 15; attempt++) {
+                    const check = await fetch('/api/led/commands/' + receipt.id);
+                    if (!check.ok) {
+                        document.getElementById('ledCommandStatus').textContent = '命令 ' + receipt.id + ' 結果未知或紀錄已過期';
+                        return;
+                    }
+                    const result = await check.json();
+                    if (result.status === 'executed') {
+                        document.getElementById('ledCommandStatus').textContent = '命令 ' + receipt.id + ' 已執行';
+                        return;
+                    }
+                    if (['rejected', 'failed', 'cancelled'].includes(result.status)) {
+                        document.getElementById('ledCommandStatus').textContent = '命令 ' + receipt.id + ' 未完成：' + result.status + ' / ' + result.reason;
+                        return;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+                document.getElementById('ledCommandStatus').textContent = '命令 ' + receipt.id + ' 尚未取得完成結果，請查詢命令狀態';
             } catch (error) {
                 console.error('LED 控制失敗:', error);
-                document.getElementById('ledAlertStatus').textContent = 'LED 操作失敗，請檢查連接';
+                document.getElementById('ledCommandStatus').textContent = '連接中斷，LED 操作結果未知';
+            } finally {
+                ledRequestPending = false;
+                await updateData();
             }
         }
         
