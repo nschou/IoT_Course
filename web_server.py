@@ -186,6 +186,14 @@ async def api_led_toggle(request):
                     headers={'Content-Type': 'application/json; charset=utf-8'})
 
 
+@app.route('/api/led/status')
+async def api_led_status(request):
+    """Fast snapshot only: no ADC, DHT, SPI or GPIO operation."""
+    snapshot = led_service.snapshot() if led_service else {'available': False, 'alert_active': False}
+    return Response(json.dumps(snapshot), headers={
+        'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store'})
+
+
 @app.route('/api/led/commands/<int:command_id>')
 async def api_led_command_result(request, command_id):
     receipt = led_service.result(command_id) if led_service else None

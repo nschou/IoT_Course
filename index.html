@@ -255,13 +255,62 @@
         <p id="ledCommandStatus" role="status" aria-live="polite"></p>
 
         <footer>
-            <p>📡 實時數據刷新 | 🔄 每1秒更新一次</p>
+            <p>📡 感測資料約每秒更新 | LED 狀態獨立快速更新</p>
             <p>IoT Web Server System v1.2 - 由 Microdot 提供支持</p>
         </footer>
     </div>
     
     <script>
         let ledRequestPending = false;
+        let ledStatusRequest = null;
+        let sensorUpdatePending = false;
+        const LED_POLL_MS = 200;
+        const LED_STATUS_TIMEOUT_MS = 1000;
+
+        function updateLedStatus() {
+            if (ledStatusRequest) return ledStatusRequest;
+            const request = (async () => {
+                const controller = new AbortController();
+                let timer;
+                try {
+                    const deadline = new Promise((_, reject) => {
+                        timer = setTimeout(() => {
+                            controller.abort();
+                            reject(new Error('LED status timeout'));
+                        }, LED_STATUS_TIMEOUT_MS);
+                    });
+                    const snapshot = await Promise.race([
+                        fetch('/api/led/status', {cache: 'no-store', signal: controller.signal})
+                            .then(response => {
+                                if (!response.ok) throw new Error('HTTP ' + response.status);
+                                return response.json();
+                            }),
+                        deadline
+                    ]);
+                    showLedStatus(snapshot);
+                } catch (error) {
+                    document.getElementById('ledButton').disabled = true;
+                    document.getElementById('ledAlertStatus').textContent = 'LED 狀態回應逾時或連接失敗，暫停操作';
+                } finally {
+                    clearTimeout(timer);
+                }
+            })();
+            ledStatusRequest = request;
+            request.finally(() => {
+                if (ledStatusRequest === request) ledStatusRequest = null;
+            });
+            return request;
+        }
+
+        async function pollLedStatus() {
+            await updateLedStatus();
+            setTimeout(pollLedStatus, LED_POLL_MS);
+        }
+
+        async function pollSensorData() {
+            await updateData();
+            setTimeout(pollSensorData, 1000);
+        }
         function showLedStatus(led) {
             document.getElementById('ledButton').disabled = ledRequestPending || !led.available || Boolean(led.alert_active);
             document.getElementById('ledAlertStatus').textContent = led.alert_active
@@ -270,11 +319,13 @@
         }
         // 自動刷新數據
         async function updateData() {
+            if (sensorUpdatePending) return;
+            sensorUpdatePending = true;
             try {
-                const response = await fetch('/api/data');
+                const response = await fetch('/api/data', {cache: 'no-store'});
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const data = await response.json();
-                showLedStatus(data.led || {});
+                // LED state has its own fast channel; never apply this older copy.
                 
                 // 更新溫度
                 const temp = data.temp ?? '--';
@@ -321,8 +372,8 @@
                 document.getElementById('rfidStatus').textContent = '連接失敗，顯示上次資料';
                 document.getElementById('motionMessage').textContent = '連接失敗，顯示上次資料';
                 document.getElementById('musicStatus').textContent = '連接失敗，狀態未知';
-                document.getElementById('ledButton').disabled = true;
-                document.getElementById('ledAlertStatus').textContent = '連接失敗，LED 狀態未知';
+            } finally {
+                sensorUpdatePending = false;
             }
         }
         
@@ -336,6 +387,7 @@
                 const receipt = await response.json();
                 if (response.status !== 202) {
                     document.getElementById('ledCommandStatus').textContent = '操作未受理：' + (receipt.reason || response.status);
+                    if (response.status === 409) showLedStatus({available: true, alert_active: true});
                     return;
                 }
                 document.getElementById('ledCommandStatus').textContent = '命令 ' + receipt.id + ' 已受理，等待執行';
@@ -362,7 +414,7 @@
                 document.getElementById('ledCommandStatus').textContent = '連接中斷，LED 操作結果未知';
             } finally {
                 ledRequestPending = false;
-                await updateData();
+                await updateLedStatus();
             }
         }
         
@@ -380,9 +432,9 @@
             }
         }
         
-        // 頁面加載時立即更新一次，然後每1秒更新
-        updateData();
-        setInterval(updateData, 1000);
+        // Each channel schedules its next request only after the previous one ends.
+        pollSensorData();
+        pollLedStatus();
     </script>
 </body>
 </html>

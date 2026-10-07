@@ -180,6 +180,11 @@ class OwnerTests(unittest.IsolatedAsyncioTestCase):
             web.led_service = self.service
             from microdot.test_client import TestClient
             client = TestClient(web.app)
+            web.get_current_light = lambda: (_ for _ in ()).throw(AssertionError('Status must not sample ADC'))
+            fast_status = await client.get('/api/led/status')
+            self.assertEqual(fast_status.status_code, 200)
+            self.assertFalse(fast_status.json['alert_active'])
+            self.assertEqual(fast_status.headers['Cache-Control'], 'no-store')
             http_response = await client.post('/api/led/toggle')
             self.assertEqual(http_response.status_code, 202)
             http_id = http_response.json['id']
@@ -188,6 +193,7 @@ class OwnerTests(unittest.IsolatedAsyncioTestCase):
             receipt = json.loads(response.body)
             self.assertEqual(receipt['status'], 'accepted')
             self.service.submit('low_light_alert', 'light')
+            self.assertTrue((await client.get('/api/led/status')).json['alert_active'])
             http_result = await client.get('/api/led/commands/{}'.format(http_id))
             self.assertEqual(http_result.status_code, 200)
             self.assertEqual(http_result.json['status'], 'rejected')

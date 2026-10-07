@@ -1,6 +1,6 @@
 # 多個來源控制單一 LED：單一擁有者實驗講義
 
-此版在 `refactor/led-single-owner` 分支實作，以重構前 `88ca2fb` 為可比較基線。2026-10-07 使用者回報目前實機測試情況良好；這是使用者回報，不推論所有故障情境或效能皆已驗證。本次只深化講義，不修改程式；分支仍未合併或推送。
+此版在 `refactor/led-single-owner` 分支實作，以重構前 `88ca2fb` 為可比較基線。2026-10-07 使用者回報目前實機測試情況良好；這是使用者回報，不推論所有故障情境或效能皆已驗證。先前講義版本已推送至分支；本次另修正網頁LED狀態更新延遲，仍未合併main，本次修正尚未推送。
 
 ## 閱讀路線：先走案例，再讀設計細節
 
@@ -316,7 +316,7 @@ sequenceDiagram
 
 ## 8. 把同樣規則套到網頁按鈕
 
-網頁按鈕停用是使用者提示，不是資源控制的保障。每秒更新可能延遲，舊頁面或其他HTTP客戶端仍可能送出POST。
+網頁按鈕停用是使用者提示，不是資源控制的保障。LED 狀態現採獨立快速輪詢，仍可能受網路或排程延遲影響；舊頁面或其他HTTP客戶端仍可能送出POST，後端submit的busy檢查才是權威。
 
 ```mermaid
 sequenceDiagram
@@ -333,6 +333,37 @@ sequenceDiagram
 正常時POST回202與ID，不等待owner完成。`index.html.toggleLED()`會查`GET /api/led/commands/ID`，區分executed、rejected、failed、cancelled；最近16筆之外回404，應顯示結果未知或過期，不應斷言命令沒有執行。
 
 實體按鈕與網頁的共同點是只能提交cycle；差別是實體需要消耗按下／放開，Web需要HTTP受理狀態與結果查詢。兩者不能只用同一種前端停用方式解決。
+
+### 8A. 提示需要自己的快速資料通道
+
+2026-10-07 使用者回報，實機紅閃開始約2秒後網頁才顯示警示、停用按鈕，隨即因警示已完成又顯示可操作。這表示畫面不是同步的控制狀態，不能因此推論後端允许插入改色。原網頁將LED顯示綁在每秒/api/data，且setInterval可能產生重疊請求；舊回應可能較晚抵達。這是已確認的程式風險，尚未量測本次2秒延遲各部分的比例。
+
+```mermaid
+sequenceDiagram
+    participant Browser as 瀏覽器
+    participant FastApi as LED狀態API
+    participant Owner as LedService快照
+    participant DataApi as 感測資料API
+    Browser->>DataApi: GET /api/data
+    Browser->>FastApi: GET /api/led/status
+    FastApi->>Owner: snapshot 僅複製RAM狀態
+    Owner-->>FastApi: alert_active與available
+    FastApi-->>Browser: JSON及no-store
+    Browser->>Browser: 更新警示提示及停用按鈕
+    DataApi-->>Browser: 較慢的感測回應
+    Browser->>Browser: 只更新感測卡片不更新LED
+    Note over Browser,FastApi: LED請求完成後再等200ms開始下一筆
+```
+
+- **快速端點：**web_server.api_led_status只呼叫led_service.snapshot，不讀ADC、DHT、RFID或GPIO；回Cache-Control:no-store。/api/data仍含LED副本供相容，但新前端不使用它更新LED。
+- **前端分流：**pollLedStatus→updateLedStatus取得快速快照，完成後等200ms再取；pollSensorData→updateData完成後等1000ms再取，兩個通道分開運作。200ms不是保證反應上限，仍加上HTTP與排程時間。
+- **不重疊：**LED一次只保有一個ledStatusRequest，多個呼叫共用該Promise；感測也有pending檢查。不用setInterval持續新增未完成請求，避免舊感測回應把新的LED提示覆蓋。
+- **逾時：**LED狀態請求1秒未完成就Abort，顯示狀態未知並停用按鈕；Promise.race讓已逾時請求的晚到回應不再渲染。下一筆成功才恢復。沒有把未知當成可操作。
+- **拒絕仍有效：**POST回409時立即顯示警示；命令提交與busy政策未改。切色結果查詢後改刷新快速LED通道，不等待整份感測資料。
+
+這是較快的輪詢，並非server push，也不會提前預知尚未取得的狀態。若ESP32有同步耗時操作阻塞事件迴圈、WiFi延遲或瀏覽器背景節流，快速端點也會延遲；需另行量測，不宣稱本次已確認或修正所有根因。快照是取樣當下的資訊，畫面仍是最終一致而非與GPIO零延遲同步。
+
+桌面測試以延遲的fetch驗證慢感測不擋LED、舊感測不重新啟用按鈕、單筆在途、逾時Abort、晚到回應忽略與恢复；實際Microdot路由測試確認狀態端點不調用ADC並回no-store。部署本次修正只需更新web_server.py與index.html，重啟ESP32重新載入HTML，再在瀏覽器強制重新整理。
 
 ## 9. 閃完之後再遮光：還有一個獨立的開關
 
@@ -558,7 +589,7 @@ armed仍在光照生產者內管理，50 ms取樣；警示busy期間不rearm。5
 
 桌面20個Python測試通過，涵蓋命令FIFO、兩次cycle不合併、警示預約競爭、清除待執行改色、五次輸出／恢復、時間回繞、延遲不跳階段、有界記錄／佇列、取消／關機、GPIO失敗、Web202／409／結果查詢與既有PIR／RFID回歸。另以固定隨機種子進行1000輪混合命令、再200輪收尾，確認記憶體上限與效果結束；並驗證main任務錯誤後等待owner熄燈。網頁JavaScript模擬測試通過受理／執行／後續拒絕與原功能。非ESP32實機、broker、真實瀏覽器布局或實機壓力驗證。
 
-本講義16張Mermaid圖已用11.13.0實際解析16/16通過；未做Typora／VS Code視覺布局驗證，解析不等於所有編輯器的視覺布局一致。
+本講義全部17張Mermaid圖已使用11.13.0實際解析，17/17通過；未做Typora／VS Code視覺布局驗證，解析不等於所有編輯器的視覺布局一致。
 
 ### A9. 比較與回復
 

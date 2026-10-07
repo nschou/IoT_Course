@@ -24,26 +24,29 @@ const context = vm.createContext({
             if (postStatus === 409) led.alert_active = true;
             return {ok: postStatus === 202, status: postStatus, json: async () => ({id: 9, status: postStatus === 202 ? 'accepted' : 'rejected', reason: 'busy'})};
         }
+        if (url === '/api/led/status') return {ok: true, json: async () => ({...led})};
         if (url.startsWith('/api/led/commands/')) return {ok: true, json: async () => ({id: 9, status: commandStatus, reason: 'alert_started'})};
         return {ok: true, json: async () => ({temp: 0, humidity: 0, light: 0, rfid, motion, led})};
     },
-    setInterval() {}, alert() {}, console: {log() {}, error() {}}
+    AbortController, setTimeout() {return 1;}, clearTimeout() {}, alert() {}, console: {log() {}, error() {}}
 });
 (async () => {
     vm.runInContext(source, context);
-    await context.updateData();
+    await new Promise(setImmediate);
+    async function refresh() { await context.updateData(); await context.updateLedStatus(); }
+    await refresh();
     assert.equal(elements.rfidUid.textContent, '0102030404');
     assert.equal(elements.lightCard.textContent, 0);
     assert.equal(elements.tempCard.textContent, 0);
     assert.equal(elements.ledButton.disabled, false);
     led.alert_active = true;
-    await context.updateData();
+    await refresh();
     assert.equal(elements.ledButton.disabled, true);
     assert.match(elements.ledAlertStatus.textContent, /紅燈警示中/);
     await context.toggleLED();
     assert.equal(posts, 0);
     led.alert_active = false;
-    await context.updateData();
+    await refresh();
     postStatus = 409; // A warning begins after the last browser refresh.
     await context.toggleLED();
     assert.equal(posts, 1);
@@ -51,7 +54,7 @@ const context = vm.createContext({
     assert.match(elements.ledAlertStatus.textContent, /紅燈警示中/);
     postStatus = 202;
     led.alert_active = false;
-    await context.updateData();
+    await refresh();
     await context.toggleLED();
     assert.equal(posts, 2);
     assert.match(elements.ledCommandStatus.textContent, /已執行/);
@@ -63,30 +66,30 @@ const context = vm.createContext({
     assert.equal(elements.motionMessage.textContent, '等待移動');
     assert.equal(elements.motionCount.textContent, 0);
     motion = {...motion, detected: true, count: 1, last_detected_at: '2026-10-06 02:41:04', music_status: 'playing'};
-    await context.updateData();
+    await refresh();
     assert.equal(elements.motionMessage.textContent, '偵測到移動物');
     assert.equal(elements.musicStatus.textContent, '播放中');
     assert.equal(elements.motionTime.textContent, motion.last_detected_at);
     motion = {...motion, detected: false, music_status: 'completed'};
-    await context.updateData();
+    await refresh();
     assert.equal(elements.motionMessage.textContent, '等待移動');
     assert.equal(elements.motionCount.textContent, 1);
     assert.equal(elements.musicStatus.textContent, '播放完成');
     rfid = {status: 'init_error', last_uid: null, last_read_at: null, error: '<not html>'};
-    await context.updateData();
+    await refresh();
     assert.equal(elements.rfidUid.textContent, '尚未讀卡');
     assert.equal(elements.rfidStatus.textContent, '初始化失敗');
     assert.equal(elements.rfidError.textContent, '<not html>');
     fail = true;
-    await context.updateData();
+    await refresh();
     assert.equal(elements.status.textContent, '🔴 連接失敗');
     assert.equal(elements.ledButton.disabled, true);
     assert.equal(elements.musicStatus.textContent, '連接失敗，狀態未知');
     fail = false;
-    await context.updateData();
+    await refresh();
     assert.equal(elements.status.textContent, '🟢 正常');
     motion = {...motion, sensor_status: 'error', sensor_error: '<sensor error>', music_status: 'error', music_error: 'bad "note"'};
-    await context.updateData();
+    await refresh();
     assert.equal(elements.motionMessage.textContent, 'PIR 讀取異常');
     assert.equal(elements.musicStatus.textContent, '播放失敗');
     assert.equal(elements.motionError.textContent, '<sensor error>；bad "note"');
