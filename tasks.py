@@ -78,22 +78,20 @@ async def pir_monitor_task(pir_sensor, motion_event, motion_state=None):
     interval = getattr(config, 'PIR_POLL_INTERVAL_MS', 500)
     print(f'[Task] PIR 偵測已啟動，輪詢={interval} ms')
     previous = None
-    samples = 0
     last_detection_ms = None
     while True:
         try:
             current = pir_sensor.is_motion()
             now_ms = time.ticks_ms() if motion_state is not None else None
-            if current != previous or samples % 20 == 0:
-                print(f'[PIR] GPIO 讀值={int(current)}')
             if previous is not True and current:
                 motion_event.set()
+                date_str, _, time_str = get_current_time()
+                detected_at = '{} {}'.format(date_str, time_str)
                 if motion_state is not None:
-                    date_str, _, time_str = get_current_time()
                     last_detection_ms = now_ms
-                    motion_state['last_detected_at'] = '{} {}'.format(date_str, time_str)
+                    motion_state['last_detected_at'] = detected_at
                     motion_state['count'] += 1
-                print('[PIR] 偵測到移動，觸發音樂')
+                print('[PIR] 偵測到移動，時間：{}，觸發音樂'.format(detected_at))
             if motion_state is not None:
                 motion_state['sensor_status'] = 'ready'
                 motion_state['sensor_error'] = None
@@ -104,7 +102,6 @@ async def pir_monitor_task(pir_sensor, motion_event, motion_state=None):
                 if not motion_state['detected']:
                     last_detection_ms = None
             previous = current
-            samples += 1
         except Exception as e:
             previous = None
             if motion_state is not None:

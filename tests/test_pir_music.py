@@ -64,7 +64,7 @@ class PirMusicTests(unittest.IsolatedAsyncioTestCase):
             samples += 1
             if samples == 7:
                 raise StopCycles()
-        task = load_task('pir_monitor_task', uasyncio=types.SimpleNamespace(sleep_ms=sleep))
+        task = load_task('pir_monitor_task', get_current_time=lambda: ('2026-10-07', '三', '14:25:22'), uasyncio=types.SimpleNamespace(sleep_ms=sleep))
         with self.assertRaises(StopCycles):
             await task(types.SimpleNamespace(is_motion=lambda: next(values)), Event())
         self.assertEqual(count, 3)
