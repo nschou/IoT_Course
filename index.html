@@ -266,6 +266,41 @@
         let sensorUpdatePending = false;
         const LED_POLL_MS = 200;
         const LED_STATUS_TIMEOUT_MS = 1000;
+        const STATUS_VALID_MS = 5000;
+        let lastLedSnapshot = null;
+        let lastLedSuccessAt = null;
+        let lastConnectionSuccessAt = null;
+        let ledFailureCount = 0;
+        let lastLedFailure = null;
+        const statusNow = () => performance.now();
+
+        function connectionSucceeded() {
+            lastConnectionSuccessAt = statusNow();
+        }
+
+        function renderLedStatus() {
+            const now = statusNow();
+            const fresh = lastLedSuccessAt !== null && now - lastLedSuccessAt < STATUS_VALID_MS;
+            const connected = lastConnectionSuccessAt !== null && now - lastConnectionSuccessAt < STATUS_VALID_MS;
+            const led = lastLedSnapshot;
+            document.getElementById('ledButton').disabled = ledRequestPending || !fresh || !led?.available || Boolean(led?.alert_active);
+            document.getElementById('ledAlertStatus').textContent = !fresh
+                ? (connected ? 'LED 狀態更新異常，暫停操作' : '連線狀態無法確認，暫停操作')
+                : (led.alert_active ? '紅燈警示中：閃爍 5 次，改色操作暫停且不排隊'
+                    : (led.available ? 'LED 可操作' : 'LED 尚未就緒'));
+        }
+
+        function monitorLedFreshness() {
+            renderLedStatus();
+            setTimeout(monitorLedFreshness, 200);
+        }
+
+        function getLedDiagnostics() {
+            const now = statusNow();
+            return {failureCount: ledFailureCount, lastFailure: lastLedFailure,
+                ledAgeMs: lastLedSuccessAt === null ? null : now - lastLedSuccessAt,
+                connectionAgeMs: lastConnectionSuccessAt === null ? null : now - lastConnectionSuccessAt};
+        }
 
         function updateLedStatus() {
             if (ledStatusRequest) return ledStatusRequest;
@@ -287,10 +322,13 @@
                             }),
                         deadline
                     ]);
+                    connectionSucceeded();
+                    ledFailureCount = 0;
                     showLedStatus(snapshot);
                 } catch (error) {
-                    document.getElementById('ledButton').disabled = true;
-                    document.getElementById('ledAlertStatus').textContent = 'LED 狀態回應逾時或連接失敗，暫停操作';
+                    ledFailureCount++;
+                    lastLedFailure = {reason: error.message, at: statusNow()};
+                    renderLedStatus();
                 } finally {
                     clearTimeout(timer);
                 }
@@ -312,10 +350,9 @@
             setTimeout(pollSensorData, 1000);
         }
         function showLedStatus(led) {
-            document.getElementById('ledButton').disabled = ledRequestPending || !led.available || Boolean(led.alert_active);
-            document.getElementById('ledAlertStatus').textContent = led.alert_active
-                ? '紅燈警示中：閃爍 5 次，改色操作暫停且不排隊'
-                : (led.available ? 'LED 可操作' : 'LED 尚未就緒');
+            lastLedSnapshot = {...led};
+            lastLedSuccessAt = statusNow();
+            renderLedStatus();
         }
         // 自動刷新數據
         async function updateData() {
@@ -325,6 +362,8 @@
                 const response = await fetch('/api/data', {cache: 'no-store'});
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const data = await response.json();
+                connectionSucceeded();
+                renderLedStatus();
                 // LED state has its own fast channel; never apply this older copy.
                 
                 // 更新溫度
@@ -433,6 +472,7 @@
         }
         
         // Each channel schedules its next request only after the previous one ends.
+        monitorLedFreshness();
         pollSensorData();
         pollLedStatus();
     </script>

@@ -9,6 +9,7 @@ const elements = {};
 const ids = [...html.matchAll(/id="([^"]+)"/g)].map(m => m[1]);
 ids.forEach(id => elements[id] = { textContent: '', style: {} });
 let fail = false;
+let now = 0;
 let rfid = {status: 'ready', last_uid: '0102030404', last_read_at: '2026-10-06 00:30:00', error: null};
 let motion = {sensor_status: 'ready', detected: false, count: 0, last_detected_at: null, music_status: 'idle'};
 let led = {available: true, alert_active: false};
@@ -28,7 +29,7 @@ const context = vm.createContext({
         if (url.startsWith('/api/led/commands/')) return {ok: true, json: async () => ({id: 9, status: commandStatus, reason: 'alert_started'})};
         return {ok: true, json: async () => ({temp: 0, humidity: 0, light: 0, rfid, motion, led})};
     },
-    AbortController, setTimeout() {return 1;}, clearTimeout() {}, alert() {}, console: {log() {}, error() {}}
+    performance: {now: () => now}, AbortController, setTimeout() {return 1;}, clearTimeout() {}, alert() {}, console: {log() {}, error() {}}
 });
 (async () => {
     vm.runInContext(source, context);
@@ -81,6 +82,7 @@ const context = vm.createContext({
     assert.equal(elements.rfidStatus.textContent, '初始化失敗');
     assert.equal(elements.rfidError.textContent, '<not html>');
     fail = true;
+    now += 5001;
     await refresh();
     assert.equal(elements.status.textContent, '🔴 連接失敗');
     assert.equal(elements.ledButton.disabled, true);
