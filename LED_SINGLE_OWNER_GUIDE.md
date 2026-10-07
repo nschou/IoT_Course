@@ -334,6 +334,8 @@ sequenceDiagram
 
 實體按鈕與網頁的共同點是只能提交cycle；差別是實體需要消耗按下／放開，Web需要HTTP受理狀態與結果查詢。兩者不能只用同一種前端停用方式解決。
 
+> 閱讀版本提示：8A、8B說明快速通道的第一版；其中「單次查詢失敗立即停用」已由8C的有效期限判斷取代。分流與後端仲裁仍保留。
+
 ### 8A. 提示需要自己的快速資料通道
 
 2026-10-07 使用者回報，實機紅閃開始約2秒後網頁才顯示警示、停用按鈕，隨即因警示已完成又顯示可操作。這表示畫面不是同步的控制狀態，不能因此推論後端允许插入改色。原網頁將LED顯示綁在每秒/api/data，且setInterval可能產生重疊請求；舊回應可能較晚抵達。這是已確認的程式風險，尚未量測本次2秒延遲各部分的比例。
@@ -425,6 +427,107 @@ flowchart TD
 往後本專案優先採用這個方式呈現會影響操作的狀態：由掌管資源的服務提供輕量RAM快照，與一般感測展示分開輪詢；各通道一次只保有一筆請求，完成後排下一筆，使用no-store、逾時處理並明確顯示未知。一般卡片不回寫控制提示，操作結果另用命令ID查詢，控制許可仍由後端判定。
 
 使用前提是後端已有可快速讀取的可信狀態、事件迴圈可正常讓出，且輪詢流量可接受。單頁LED約最多5次查詢每秒，多頁會相加；增加通道前應評估ESP32負載。若需捕捉非常短的事件，快照可能在兩次取樣間漏掉，應另外保存事件序號／紀錄；若需大量連線或更低延遲，再評估SSE／WebSocket。這些是替代方案的使用時機，本次沒有實作。同步阻塞或WiFi延遲仍可能拖慢所有通道，分流不會自動消除它們。
+
+### 8C. 不把一次查詢失敗當成連線失效：狀態有效期限
+
+使用者在重新整理瀏覽器後確認：不再頻繁出現連線失敗訊息並讓按鈕1瞬間失能。這是本次實機操作結果的回報；測試精確時間、持續時間與HTTP延遲數據未提供。已確認的是新版介面的改善，尚未證實偶發HTTP失敗的根因已消除。
+
+#### 先區分三個問題
+
+1. **值有沒有改變？**LED連續回報「可操作」，或者光照連續回報相同數字，都是合理情況。
+2. **最近是否成功確認？**收到新的成功回應，即使值相同，也有新的確認時間。画面留著上一筆數字並不代表取得新資料。
+3. **這次確認的是哪一種資料？**感測API成功證明近期仍能通訊，但不能保證LED目前不是紅閃；只有LED狀態回應才能更新LED的有效期限。
+
+| 機制 | 快速通道第一版 | 目前版本 |
+|---|---|---|
+| LED單次查詢失敗 | 立即停用並顯示錯誤 | 保留未過期的最近LED快照 |
+| 下一筆成功 | 立即清除錯誤，容易短暫閃動 | 更新確認時間並依快照呈現 |
+| 光照API成功 | 不參與LED連線判斷 | 更新連線健康時間，不更新LED時間 |
+| 何時因未知停用 | 每次失敗就停用 | LED超過有效期限仍未確認 |
+| LED明確紅閃／不可用 | 立即停用 | 同樣立即停用 |
+
+#### 組成與程式位置
+
+這一層在index.html，並不增加另一個GPIO控制者。updateLedStatus取得LED快照，updateData取得感測資料；兩者成功時都呼叫connectionSucceeded，而只有showLedStatus保存LED快照及其確認時間。
+
+| 名稱 | 是什麼／怎麼產生 | 使用目的與消失方式 |
+|---|---|---|
+| lastLedSnapshot | showLedStatus複製成功的LED資料 | renderLedStatus判斷available與alert_active；下一筆覆蓋，頁面重載清除 |
+| lastLedSuccessAt | 成功確認LED時的performance.now() | 計算LED資料年齡，值相同仍更新；重載回到null |
+| lastConnectionSuccessAt | 兩種資料API成功時的performance.now() | 區分LED通道異常與連線無法確認；不延長LED期限 |
+| STATUS_VALID_MS | 目前5000ms | 容忍短暫失敗的有效期限，須依需求與實測調整 |
+| monitorLedFreshness | 每200ms呼叫renderLedStatus | 即使HTTP卡住也能檢查過期；不是另一條HTTP輪詢 |
+| ledFailureCount／lastLedFailure | 失敗時加計數並保存最新原因與時間 | 成功歸零連續失敗數，保留最後錯誤；只保留一筆不累積歷史 |
+
+performance.now是瀏覽器單調時間，用於經過時間，不是ESP32偵測日期，也不需要兩端時鐘同步。這裡量的是「距離最近收到成功回應多久」，不是保證後端快照的絕對產生時間；HTTP仍可能延遲。有效條件為年齡小於5000ms，達到5000ms便過期，監視器在下一次排程時呈現。
+
+```mermaid
+flowchart TD
+    LedOk[LED資料API成功] --> Conn[更新連線確認時間]
+    LedOk --> Save[保存LED快照並更新LED確認時間]
+    SensorOk[感測資料API成功] --> Conn
+    SensorOk --> Cards[只更新感測卡片]
+    Failure[LED資料API失敗] --> Record[保存診斷並保留原快照]
+    Save --> Render[renderLedStatus]
+    Record --> Render
+    Watch[每200ms監視有效期限] --> Render
+    Render --> Fresh{LED確認未滿5秒嗎}
+    Fresh -->|否| Disable[停用按鈕]
+    Disable --> Health{近期仍有資料API成功嗎}
+    Health -->|是| LedError[LED狀態更新異常]
+    Health -->|否| ConnError[連線狀態無法確認]
+    Fresh -->|是| State{紅閃或服務不可用嗎}
+    State -->|是| Known[停用並顯示明確原因]
+    State -->|否| Pending{正在處理按鈕命令嗎}
+    Pending -->|是| Hold[維持按鈕停用]
+    Pending -->|否| Ready[LED可操作]
+```
+
+#### 案例：光照正常，但LED查詢偶爾逾時
+
+```mermaid
+sequenceDiagram
+    participant Browser as 瀏覽器
+    participant LedApi as LED狀態API
+    participant DataApi as 感測API
+    participant View as 狀態與畫面
+    Browser->>LedApi: GET /api/led/status
+    LedApi-->>Browser: available=true與alert_active=false
+    Browser->>View: 保存快照及兩個成功時間
+    View-->>Browser: 按鈕可操作
+    Browser->>LedApi: 下一次狀態查詢
+    Note over Browser,LedApi: 1秒未完成，本輪逾時並要求Abort
+    Browser->>View: 記錄失敗，保留未過期快照
+    View-->>Browser: 不因單次失敗切換按鈕
+    Browser->>DataApi: GET /api/data
+    DataApi-->>Browser: 成功，即使光照數字相同
+    Browser->>View: 只更新連線確認時間及卡片
+    Note over Browser,View: 若LED確認年齡達5秒，仍須停用
+    Browser->>LedApi: 後續LED查詢
+    LedApi-->>Browser: 與之前相同的LED狀態
+    Browser->>View: 更新LED確認時間，不要求值改變
+    View-->>Browser: 狀態有效，按鈕可操作
+```
+
+用假設時間走一次：t=0收到可操作快照，t=1.2秒某次查詢逾時，LED年齡還不到5秒，畫面不跳動。t=3秒光照成功，連線確認時間更新，但LED確認仍是t=0。若一直沒有LED成功，t=5秒起監視器停用並顯示「LED狀態更新異常」；若後來兩條通道都超過5秒未成功，則顯示「連線狀態無法確認」。收到相同的可操作LED快照就重新確認有效並恢復，完全不需要顏色或光照值改變。這是示例時間，不是實機量測。
+
+#### 安全性、限制與診斷
+
+保留5秒內快照可能暫時顯示過去的可操作狀態；若紅閃剛開始而前端尚未得知，使用者仍可能送出改色要求。後端submit檢查busy並回409，前端據此顯示紅閃，因此控制權沒有交給這個有效期限。若已知紅閃中，查詢失敗也不會自行推算閃完而開放按鈕；必須取得新的成功狀態。
+
+LED資料成功代表快照確認，POST回409則是後端明确拒絕的控制證據；showLedStatus同樣呈現busy。感測通道中的led副本仍不使用，避免重回舊回應覆蓋風險。逾時Abort與Promise.race仍保留，晚到回應不渲染。
+
+瀏覽器開發者工具Console可執行getLedDiagnostics()，查看failureCount、lastFailure、ledAgeMs與connectionAgeMs。這是RAM診斷，不是永久事件日誌；重載頁面就清除。連線健康只表示近期能成功通訊，不承諾此刻每一個端點都能回應。
+
+**適用前提：**能容忍短時間使用最近狀態，且後端每次操作都驗證權限／busy。對不可容忍舊狀態的操作，應縮短期限或採更嚴格失敗政策，不能直接套用5秒。200ms監視與HTTP逾時也受瀏覽器排程影響，背景頁面可能延後。
+
+#### 部署與實測記錄
+
+新版只改index.html，web_server.py須已具有/api/led/status。伺服器啟動時讀入HTML到RAM，因此上傳後應重啟ESP32，再以Ctrl+F5強制刷新瀏覽器。只上傳檔案不代表現有頁面已執行新程式。
+
+比較基線f6b8e53保存「單次失敗立即停用」，5f3807c實作有效期限；ab5465f另調整PIR輸出，與這項判斷無關。使用者最初只上傳HTML仍見舊現象，後於瀏覽器重新整理後回報不再發生瞬間失能；不能因此推定最初所有失敗都由網路造成。先前20個Python與2組JavaScript桌面測試通過，新狀態測試包含短暫失敗、LED過期但感測成功、整體連線過期與相同快照恢復。
+
+給學生的檢查題：光照一直成功且LED超過5秒未更新，按鈕該不該可操作？答案是不該，因為「能連上ESP32」與「能確認LED可操作」是兩件不同的事。
 
 ## 9. 閃完之後再遮光：還有一個獨立的開關
 
@@ -650,7 +753,7 @@ armed仍在光照生產者內管理，50 ms取樣；警示busy期間不rearm。5
 
 桌面20個Python測試通過，涵蓋命令FIFO、兩次cycle不合併、警示預約競爭、清除待執行改色、五次輸出／恢復、時間回繞、延遲不跳階段、有界記錄／佇列、取消／關機、GPIO失敗、Web202／409／結果查詢與既有PIR／RFID回歸。另以固定隨機種子進行1000輪混合命令、再200輪收尾，確認記憶體上限與效果結束；並驗證main任務錯誤後等待owner熄燈。網頁JavaScript模擬測試通過受理／執行／後續拒絕與原功能。非ESP32實機、broker、真實瀏覽器布局或實機壓力驗證。
 
-本講義全部18張Mermaid圖已使用11.13.0實際解析，18/18通過；未做Typora／VS Code視覺布局驗證，解析不等於所有編輯器的視覺布局一致。
+本講義全部20張Mermaid圖已使用11.13.0實際解析，20/20通過；未做Typora／VS Code視覺布局驗證，解析不等於所有編輯器的視覺布局一致。
 
 ### A9. 比較與回復
 
