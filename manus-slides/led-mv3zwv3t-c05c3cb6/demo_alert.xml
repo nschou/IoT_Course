@@ -1,0 +1,38 @@
+<slide id="demo_alert">
+  <background color="bg-page"/>
+  <shape type="rect" x="1240" y="40" width="8" height="8" fill="state-alert" corner-radius="4"/>
+  <shape type="rect" x="1220" y="40" width="8" height="8" fill="bg-card" corner-radius="4"/>
+  <shape type="rect" x="1200" y="40" width="8" height="8" fill="bg-card" corner-radius="4"/>
+  
+  <text x="60" y="40" width="1160" height="60" font="heading" color="text-main" anchor="middle">
+    <p>動態演示 2：低光警示如何保護原本狀態？</p>
+  </text>
+  
+  <shape type="rect" x="60" y="140" width="1160" height="60" fill="bg-card" corner-radius="8"/>
+  <text x="80" y="140" width="140" height="60" font="body" color="text-muted" anchor="middle"><p>初始狀態</p></text>
+  <text x="240" y="140" width="200" height="60" font="code" color="state-normal" anchor="middle"><p>色碼: 藍 1</p></text>
+  <text x="460" y="140" width="200" height="60" font="code" color="text-main" anchor="middle"><p>busy: false</p></text>
+  <text x="680" y="140" width="200" height="60" font="code" color="text-main" anchor="middle"><p>effect: None</p></text>
+
+  <!-- Timeline -->
+  <shape type="line" x="200" y="280" width="0" height="340" stroke="text-muted" stroke-width="2"/>
+  
+  <shape type="rect" x="194" y="274" width="12" height="12" fill="state-alert" corner-radius="6"/>
+  <text x="240" y="260" width="300" height="40" font="body" color="text-main"><p>1. 警示被 submit 受理</p></text>
+  <text x="560" y="260" width="600" height="40" font="code" color="state-alert"><p>reserved = true (封鎖新改色)</p></text>
+  <text x="560" y="300" width="600" height="40" font="code" color="state-normal"><p>LED 輸出仍是藍色 1</p></text>
+
+  <shape type="rect" x="194" y="374" width="12" height="12" fill="state-alert" corner-radius="6"/>
+  <text x="240" y="360" width="300" height="40" font="body" color="text-main"><p>2. Owner 取得警示</p></text>
+  <text x="560" y="360" width="600" height="40" font="code" color="state-alert"><p>保存正常狀態 (1, true)</p></text>
+
+  <shape type="rect" x="194" y="434" width="12" height="12" fill="state-alert" corner-radius="6"/>
+  <text x="240" y="420" width="300" height="40" font="body" color="text-main"><p>3. 第一次紅亮</p></text>
+  <text x="560" y="420" width="600" height="40" font="code" color="state-alert"><p>write(4)</p></text>
+  <text x="560" y="460" width="600" height="40" font="code" color="text-muted"><p>正常色碼不變，依然是 1</p></text>
+
+  <shape type="rect" x="194" y="554" width="12" height="12" fill="state-normal" corner-radius="6"/>
+  <text x="240" y="540" width="300" height="40" font="body" color="text-main"><p>4. 第五次熄滅結束</p></text>
+  <text x="560" y="540" width="600" height="40" font="code" color="state-normal"><p>恢復保存值 write(1)</p></text>
+  <text x="560" y="580" width="600" height="40" font="code" color="text-main"><p>reserved = false, effect = None</p></text>
+</slide>

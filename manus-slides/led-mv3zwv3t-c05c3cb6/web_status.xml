@@ -1,0 +1,48 @@
+<slide id="web_status">
+  <background color="bg-page"/>
+  <shape type="rect" x="1240" y="40" width="8" height="8" fill="state-web" corner-radius="4"/>
+  <shape type="rect" x="1220" y="40" width="8" height="8" fill="bg-card" corner-radius="4"/>
+  <shape type="rect" x="1200" y="40" width="8" height="8" fill="bg-card" corner-radius="4"/>
+  
+  <text x="60" y="40" width="1160" height="60" font="heading" color="text-main" anchor="middle">
+    <p>網頁提示要快，但控制權仍在後端</p>
+  </text>
+  
+  <shape type="rect" x="60" y="140" width="460" height="520" fill="bg-card" corner-radius="12"/>
+  <text x="90" y="170" width="400" height="40" font="heading" size="24" color="state-web">
+    <p>兩個通道分流</p>
+  </text>
+  <text x="90" y="230" width="400" height="120" font="body" color="text-main" line-height="1.6">
+    <p><span font="code" color="state-web">/api/led/status</span></p>
+    <p color="text-muted">快速讀取 Owner RAM 快照，專供按鈕提示，完成後等 200ms。</p>
+  </text>
+  <text x="90" y="370" width="400" height="120" font="body" color="text-main" line-height="1.6">
+    <p><span font="code" color="state-normal">/api/data</span></p>
+    <p color="text-muted">慢速讀取感測器，專供感測卡片展示，完成後等 1000ms。</p>
+  </text>
+  <text x="90" y="510" width="400" height="120" font="body" color="state-warn" line-height="1.6">
+    <p>避免慢回應或舊的感測副本，覆蓋掉最新的紅閃提示。</p>
+  </text>
+
+  <shape type="rect" x="560" y="140" width="660" height="240" fill="bg-card" corner-radius="12"/>
+  <text x="590" y="170" width="600" height="40" font="heading" size="24" color="state-alert">
+    <p>5 秒有效期限 (Tolerate short failures)</p>
+  </text>
+  <text x="590" y="230" width="600" height="140" font="body" color="text-muted" line-height="1.6">
+    <ul>
+      <li>單次 HTTP 失敗不立刻停用按鈕，保留快照。</li>
+      <li>新的成功回應，即使值相同，也刷新確認時間。</li>
+      <li>如果超過 5 秒沒有成功確認 LED 狀態，才顯示「狀態未知」並停用按鈕。</li>
+    </ul>
+  </text>
+
+  <shape type="rect" x="560" y="420" width="660" height="240" fill="bg-card" corner-radius="12" stroke="state-normal" stroke-width="2"/>
+  <text x="590" y="450" width="600" height="40" font="heading" size="24" color="state-normal">
+    <p>後端永遠是權威</p>
+  </text>
+  <text x="590" y="510" width="600" height="140" font="body" color="text-main" line-height="1.6">
+    <p>前端的停用只是使用者提示，不是資源保護的保障。</p>
+    <p>如果前端尚未得知紅閃，送出了 cycle 請求：</p>
+    <p>後端的 <span font="code">submit()</span> 依然會擋下，回傳 <span font="code" color="state-alert">HTTP 409</span>，前端收到後立刻顯示警示。</p>
+  </text>
+</slide>

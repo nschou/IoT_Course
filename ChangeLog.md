@@ -15,6 +15,439 @@
 `BUG` 表示行為不符合既有預期；`需求變更` 包含新功能、政策調整、文件與流程要求。一件工作若同時包含兩類，拆分紀錄或明確標示各項原因。
 
 Git commit hash 由歷史查詢取得；不要求把包含本紀錄的 commit hash 寫回本紀錄，避免自我引用。既有程式中的 v1.1.x／v1.2 註解不是統一的專案版本，本次開始以 Git commit 與後續 tag 作為版本依據。
+## CHG-20261121-075｜LD2410 測試與驅動集中到 micropython 套件；專案改為相容層
+
+- **類別：**需求變更（專案組織）。
+- **日期／紀錄時間：**2026-11-21 17:50:00 +08:00（工具取得台北時間）。
+- **原因：**板端測試與專案驅動各自演進，出現版本漂移；使用者要求「測試與驅動必須搭配」，以 `LD2410_repo/micropython/hardware/ld2410c.py` 為唯一驅動。
+- **作法：**① `tests/` 的 LD2410 程式（`esp32_ld2410_smoke/check/full_test/tx_probe.py`、`test_ld2410.py`）移到 `LD2410_repo/micropython/tests/`，改 import `hardware.ld2410c`（`LD2410C` API）、移除 `config.py` 依賴，腳位改寫在檔案頂端常數（UART1、TX=15、RX=16、OUT=14、115200）。② `test_ld2410.py` 與 `test_ld2410c.py` 合併去重（新增建構子開 UART、半包頭、壞尾重新同步、錯誤 ACK 忽略、無 `any()` 的 UART、資料新鮮度），舊檔移除，自動測試 23 → 28 項。③ 專案 `hardware/ld2410c.py` 為 `micropython/hardware/ld2410c.py` 的同步副本；`hardware/ld2410.py` 改為相容層（保留 `snapshot()`、`current_config()`、`firmware_version()['version']`、舊 `poll()` 語義），`apps/elder_care` 與 `demos` 不需修改。④ 驅動新增 `command_frame()`、`ack_word()`、`stats()` 供測試與診斷使用。
+- **影響：**板端部署需同時上傳 `hardware/ld2410.py` 與 `hardware/ld2410c.py`；專案 `tests/` 不再包含 LD2410 測試。
+- **驗證：**`micropython/tests/test_ld2410c.py` → 28 項全過；以假 UART 驗證相容層的 `snapshot()`／`current_config()`／`firmware_version()`／新鮮度語義；專案 `python -B -m unittest discover -s tests` → Ran 52 tests OK。
+- **部署／回復：**重新上傳 `hardware/`（兩個檔案）與 `micropython/tests/` 的板端程式；回復時還原舊 `hardware/ld2410.py` 並把測試搬回專案 `tests/`。
+
+## CHG-20261121-073｜LD2410 UART baud 統一為 115200（模組實際設定）
+
+- **類別：**BUG（設定不一致）。
+- **日期／紀錄時間：**2026-11-21 17:10:00 +08:00（工具取得台北時間）。
+- **現象：**ESP32-S3 收得到 LD2410C 的資料框（10 Hz、23 bytes/框），但送 0x00FF 一律 `LD2410 ACK timeout`，讀韌體與參數都失敗。
+- **原因分析：**模組的 UART 已由手機 App（HLKRadarTool）改為 **115200 8N1**，但 config.py、驅動預設值、apps/tests 的 fallback 與文件仍寫 256000；ESP32 以 256000 送出、模組以 115200 收，指令自然不執行。
+- **作法：**config.py／config.example.py 的 `LD2410B_BAUDRATE` 改為 115200 並更新註解；hardware/ld2410.py 預設值、apps/elder_care/*_demo.py、tests/esp32_ld2410_{check,full_test,smoke}.py 的 fallback、tests/test_ld2410.py 斷言、mdy_03／mdy_05／mdy_06 舊版與兩份元件文件同步。文件只改可操作段落，歷史紀錄保留並在開頭加註現況。
+- **影響：**所有使用 LD2410 的程式與測試；接線不變（TX=GPIO15、RX=GPIO16、OUT=GPIO14）。
+- **驗證：**`python -B -m unittest discover -s tests` → Ran 71 tests OK；全專案掃描舊字串已清除（僅剩「出廠預設 256000」的說明與歷史紀錄）。
+- **部署／回復：**重新上傳 config.py 與 tests/*.py。回復方式是把上述檔案改回 256000，但模組已改為 115200，不建議。
+
+## CHG-20261121-074｜新增 TX 方向診斷程式與 tests 索引；enter_config 加入重試
+
+- **類別：**需求變更（測試與文件）。
+- **日期／紀錄時間：**2026-11-21 17:10:00 +08:00（工具取得台北時間）。
+- **原因：**資料流正常但命令 timeout 時，需要能分辨「短接回音／真 ACK／指令沒到模組」的工具；相關程式也應統一放在專案 tests/ 之下。
+- **作法：**新增 tests/esp32_ld2410_tx_probe.py（pins()、probe(tx, rx, baud)、run()；送 0x00FF 後補送 0x00FE 還原）與 tests/README.md（五支測試程式的用途與執行順序）；hardware/ld2410.py 的 enter_config() 改為最多重送 3 次（每次 600 ms），對應官方工具 log 中 0x00FF 失敗（A002）後重送即成功的行為。
+- **影響：**只影響測試與進入設定模式的重試；命令第一次就成功時行為不變。
+- **驗證：**`python -B -m py_compile tests/esp32_ld2410_tx_probe.py` 通過；`python -B -m unittest discover -s tests` → Ran 71 tests OK。實機命令通道尚待驗證。
+- **部署／回復：**上傳 tests/esp32_ld2410_tx_probe.py、tests/README.md、hardware/ld2410.py；回復時刪除新檔案並還原 enter_config。
+
+## CHG-20261124-078｜補上板上用的 async 驗證腳本，並標示 test_ld2410c_aio.py 為 PC 專用
+
+- **類別：**BUG（文件與工具說明不足）。
+- **日期／紀錄時間：**2026-11-24 02:50:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者在裝置上執行 `tests/test_ld2410c_aio.py` 得到 `ImportError: no module named 'unittest'`。該檔使用 `unittest` 與 CPython 的 `asyncio`，本來就只能跑在電腦上，但檔案與 README 沒有標明。
+- **作法：**① `test_ld2410c_aio.py` 的 docstring 加上「PC ONLY」與替代方案說明。② 新增 `tests/esp32_ld2410_aio_smoke.py`：純 uasyncio 腳本，跑 10 秒資料流期間同時計數 ticker，結束後再讀 firmware 與參數，用來驗證「等待不阻塞」與「設定作業可獨立執行」。③ `tests/README.md` 的檔案表新增兩列，明確標示 PC 專用與板上用。
+- **影響：**只新增工具與文件；驅動未變。
+- **驗證：**`py_compile` 通過；桌面 `test_ld2410c_aio.py` 11 項仍通過。板上待實測。
+- **部署／回復：**上傳 `tests/esp32_ld2410_aio_smoke.py` 與 `hardware/ld2410c_aio.py`，在 REPL 執行 `run(10)`。回復時刪除該腳本並保留本紀錄。
+
+## CHG-20261124-077｜新增 asyncio 驅動層 LD2410CAsync 與「設定作業獨立」範例
+
+- **類別：**需求變更（架構）。
+- **日期／紀錄時間：**2026-11-24 01:20:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**專案架構以 asyncio 為主，但 `hardware/ld2410c.py` 是純同步（0 個 async/await），`read()` 與命令會阻塞 0.4–1 秒，會拖慢 LED（200 ms 節奏）、Web 與 MQTT。使用者要求底層驅動必須支援 asyncio，並要求「設定參數」為獨立作業，因為判斷必須以設定為依據。
+- **作法：**① 新增 `hardware/ld2410c_aio.py`（repo 與工作區各一份）：`LD2410CAsync` 繼承同步驅動，僅重寫等待部分——`read_async()`、`send_async()`、`_wait_ack_async()`、`enter/exit_config_async()`、`_configured_async()`、`read_params_async()`、`write_params_async()`、`firmware_version_async()`、`read_resolution_async()`、`engineering_async()`、`restart_async()`；封包編碼與解析仍沿用核心，協定只有一份。② 新增 `examples/05_async.py`：`RadarSession` 以 `asyncio.Lock` 保護 UART，`configure()` 為獨立設定作業，`stream()` 在 `ready` 之前拒絕判斷。③ 新增 `tests/test_ld2410c_aio.py`（11 項）。
+- **影響：**同步驅動與既有 28 項測試不變；新程式可改用 `LD2410CAsync`。`set_baudrate`／`set_resolution`（需重啟）尚未提供 async 版本，仍可用同步呼叫於設定階段。
+- **驗證：**`python -B tests/test_ld2410c_aio.py` → 11 項通過，含「等待期間其他任務仍能執行」的非阻塞驗證、ACK 逾時重試、狀態錯誤、參數讀寫與回讀驗證、firmware 解碼、finally 送出結束設定。`py_compile` 通過。
+- **部署／回復：**上傳 `hardware/ld2410c_aio.py`（裝置根目錄的 hardware/）與 `examples/05_async.py`；以 `uasyncio.run(main())` 執行。回復時刪除兩個新檔並保留本紀錄。
+
+## CHG-20261123-076｜修正 write_test 的 __repr__（改用 tally()）並記錄寫入測試通過
+
+- **類別：**BUG（測試程式）。
+- **日期／紀錄時間：**2026-11-23 18:40:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**`CHG-20261123-075` 為 `Report` 加了 `__repr__`，但呼叫了不存在的 `counts()`（本檔的方法名是 `tally()`）。實機跑完 `run()` 後，REPL 顯示回傳值時拋出 `AttributeError: 'Report' object has no attribute 'counts'`。
+- **作法：**`LD2410_repo/micropython/tests/esp32_ld2410_write_test.py` 的 `__repr__` 改為呼叫 `self.tally()`。
+- **影響：**僅顯示層；測試判定與寫入/還原流程不受影響。
+- **驗證：**`py_compile` 通過；以 CPython 載入模組並建立 Report，輸出 `<Report PASS=1 WARN=0 FAIL=1 SKIP=0>`。實機 `run()` 先前已通過 6 項：工程模式開啟/關閉、解析度讀取（0.75 m/門）、參數備份、寫入回讀 verified=True diff=0、還原回讀 verified=True diff=0。
+- **部署／回復：**重新上傳 `tests/esp32_ld2410_write_test.py` 即可；回復時移除 `__repr__` 並保留本紀錄。
+
+## CHG-20261123-075｜修正 write_test 的資料流誤判（單次 poll → 等待 frame）
+
+- **類別：**BUG（測試程式）。
+- **日期／紀錄時間：**2026-11-23 18:25:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**在 S2 Mini 執行 `esp32_ld2410_write_test.py` 的 `run()` 時，一開機就印「沒有資料流」並中止，但同一組接線先前已能穩定收到 10 Hz。原因是 `run()` 只呼叫一次 `radar.poll()` 就檢查 `radar.frame`；soft reboot 後 UART 緩衝為空，那一瞬間拿不到完整 frame，造成誤判。
+- **作法：**在 `LD2410_repo/micropython/tests/esp32_ld2410_write_test.py` 新增 `_wait_for_frame(radar, timeout_ms=1500)`，以 20 ms 間隔等待第一個完整資料框，`run()` 改用它；訊息改為「1.5 秒內沒有完整 frame」。另外為 `Report` 加上 `__repr__`，避免 REPL 印出 `<Report object at ...>`。
+- **影響：**只影響這支實機測試腳本；驅動與其他腳本未變（`check.py`／`full_test.py`／`smoke.py` 本來就是連續輪詢數秒，無此問題）。
+- **驗證：**`py_compile` 通過；repo 驅動測試 `28 passed, 0 failed`。實機待重跑。
+- **部署／回復：**重新上傳 `tests/esp32_ld2410_write_test.py` 後執行 `run()`。回復時改回單次 `poll()` 並保留本紀錄。
+
+## CHG-20261123-074｜記錄 LD2410B 第 3 腳為 UART_RX（實測接 GPIO36）
+
+- **類別：**需求變更（文件與腳位知識）。
+- **日期／紀錄時間：**2026-11-23 16:50:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者要在文件中明確記錄「LD2410B 第 3 腳接在 S2 Mini 的 GPIO36」，並確認該腳是否為 RX。依 UART 交叉原則（ESP32 TX 接模組 RX）與命令通道實測成功，可判定第 3 腳為 RX。
+- **作法：**在 `元件/01_毫米波雷達/LD2410B_LD2410C_接線與實測記錄.md` 第 11 節新增「記憶法」段落：LD2410B 的中間腳（第 3 腳）為 `UART_RX`，從任一端數都相同；LD2410C 的中間腳反而是 `OUT`，其 RX 在第 4 腳；並記錄 S2 Mini 上第 3 腳接 GPIO36 的實測結果。
+- **影響：**僅文件。日後換模組時可依「中間腳」快速判斷，避免把 C 的 OUT 接到 ESP32 TX。
+- **驗證：**依 2026-11-23 S2 Mini 實測：資料流 10 Hz、`firmware V2.68.24073110`、`current_config()` 回 8／8／5 秒；命令成功即證明 GPIO36（ESP32 TX）所接的模組腳為 RX。
+- **部署／回復：**文件隨版控發布；回復時移除該段落並保留本紀錄。
+
+## CHG-20261123-073｜S2 Mini 實測通過：命令通道恢復，0x00FF 無 ACK 判定為接線問題
+
+- **類別：**BUG（結案）＋ 需求變更（硬體驗證紀錄）。
+- **日期／紀錄時間：**2026-11-23 16:40:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**先前在 ESP32-S3（GPIO15／16／14）上，資料流正常但所有命令都 `ACK timeout: 0x00ff`。改用 ESP32-S2 Mini（TX=GPIO36、RX=GPIO38、OUT=GPIO40）後，同一份驅動與同一顆 LD2410C 立即恢復。
+- **作法：**① `LD2410_repo/micropython/tests/ISSUE-20261123-uart-tx-ack.md` 標記為「已解」，寫入實測數據與原因判定。② 工作區文件第 11 節新增「S2 Mini 實測結果」表。③ 未修改驅動或設定值。
+- **影響：**命令層（`write_params()`、`set_resolution()`、工程模式、`set_baudrate()`）在 S2 Mini 上可正常使用；`apps/elder_care` 的參數調整不再只能靠手機 APP。
+- **驗證：**S2 Mini 實機：資料流 30 frames / 3.0 秒 = 10.0 Hz；OUT 可切換；`firmware_version()` 回 `V2.68.24073110`；`current_config()` 回 max gate 8（moving 8、stationary 8）、no-target 5 s，與 2026-11-21 用 PC 工具寫入的值一致——同時驗證了參數解碼的位元組偏移。桌面測試仍為 repo 28 項、工作區 52 項全部通過。
+- **部署／回復：**S2 Mini 需上傳 `config.py`（36／38／40）與 `hardware/ld2410c.py`；測試腳本已改為 config 優先，無需再改常數。回復僅需改回原板子的腳位。
+
+## CHG-20261123-072｜雷達腳位改為 ESP32-S2 Mini（GPIO36／38／40）
+
+- **類別：**需求變更（硬體設定）。
+- **日期／紀錄時間：**2026-11-23 16:05:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者要把 LD2410 整合到 ESP32-S2 Mini，改用 GPIO36／38／40 接模組的 TX／RX／OUT；原設定 15／16／14 是 ESP32-S3 的腳位。
+- **作法：**`config.py` 與 `config.example.py` 的 `LD2410B_TX_PIN`／`RX_PIN`／`OUT_PIN` 改為 36／38／40，並加註 S2 Mini 的腳位限制（26–32 為 flash/PSRAM、39–42 為 JTAG、OUT 可用 GPIO34 替代）。`LD2410B_BAUDRATE` 維持 115200（模組已由 APP 改為 115200）。文件新增第 11 節「板子更換：ESP32-S2 Mini」，列出 B／C 兩種模組的對應腳位。
+- **影響：**讀取路徑與照護服務不受影響（`hardware/ld2410.py` 相容層提供的 poll／snapshot／current_config／firmware_version／presence／out_level 皆與新驅動 `hardware/ld2410c.py` 相容）。已確認工作區內沒有呼叫已移除的 `set_max_distance_and_timeout`／`set_gate_sensitivity` 或舊私有 frame 方法的程式。
+- **驗證：**`python -B -c "import config" ` 讀出 TX=36、RX=38、OUT=40、baud=115200；`python -B -m unittest discover -s tests` 52 項通過。**尚未實機驗證** S2 Mini 上的資料接收。
+- **備註：**期間發現工作區的驅動已改為 `hardware/ld2410.py`（相容層）＋ `hardware/ld2410c.py`（實作），且 `tests/test_ld2410.py` 與 `tests/esp32_ld2410_*.py` 已不在本工作區。曾依舊 API 重建 `tests/test_ld2410.py`，因 API 不符導致 18 項錯誤，已立即移除，測試回到 52 項全綠。
+- **部署／回復：**上傳 `config.py`（含 `hardware/ld2410c.py`、`hardware/ld2410.py`）。回復時把三個腳位改回 15／16／14，並保留本紀錄。
+
+## CHG-20261120-071｜重構完整測試程式：以每次執行的 Report 物件取代模組層結果清單
+
+- **類別：**BUG（測試程式架構）。
+- **日期／紀錄時間：**2026-11-20 02:35:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**`CHG-20261120-070` 只在 `run()` 開頭加 `del RESULTS[:]`，是打補丁；根因是測試結果存放在模組層共用清單，任何呼叫順序都可能造成跨次殘留，也讓 `run()` 無法安全地被重複呼叫或巢狀使用。
+- **作法：**移除模組層 `RESULTS` 與全域 `record()`，改為 `Report` 類別（`record()`、`counts()`、`names_with()`、`summary()`）。`run()` 每次建立新的 `Report` 並傳給 `show_configuration`／`test_stream`／`test_live`／`test_snapshot_semantics`／`test_encoder`／`test_commands`，最後印出總表並**回傳該 Report**，呼叫端可用 `report.counts()['FAIL']` 做自動判斷。輸出格式與檢查內容不變。
+- **影響：**測試程式內部結構變更；對外行為（輸出與判定）相同。`run()` 現在可安全連續呼叫，且每次只統計該次結果。
+- **驗證：**① `python -B -m py_compile tests/esp32_ld2410_full_test.py` 通過。② 桌面以 CPython 驗證隔離性：第一份 Report 記 2 PASS + 1 FAIL、第二份記 1 PASS，兩者計數互不影響，`isolated: True`。③ `python -B -m unittest discover -s tests` 71 項通過。尚未在裝置上重跑。
+- **部署／回復：**重新上傳 `tests/esp32_ld2410_full_test.py`；單次 `run()` 應顯示 `PASS=6 FAIL=2` 並列出 `FAIL 項目: firmware_version(), current_config()`。回復時改回模組層清單版本，並保留本紀錄。
+
+## CHG-20261120-070｜修正完整測試程式的結果累加與失敗項目顯示
+
+- **類別：**BUG（測試程式）。
+- **日期／紀錄時間：**2026-11-20 02:20:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者回報總表顯示 `PASS=12 FAIL=4`，但畫面上只有 2 項 FAIL。原因是 `RESULTS` 為模組層清單，`run()` 每次呼叫都往同一個清單累加，連續執行兩次即變成兩輪合計。
+- **作法：**`tests/esp32_ld2410_full_test.py` 的 `run()` 開頭加入 `del RESULTS[:]`，確保每次執行從空白結果表開始；`summary()` 在總表後列出 FAIL／WARN 的項目名稱，避免還要回頭找明細。
+- **影響：**只影響測試程式的輸出統計，driver 與照護服務未變。
+- **驗證：**`python -B -m py_compile tests/esp32_ld2410_full_test.py` 通過。依程式邏輯推算，重新上傳後單次 `run()` 應顯示 `PASS=6 FAIL=2`，並列出 `FAIL 項目: firmware_version(), current_config()`。尚未在裝置上重跑。
+- **部署／回復：**重新上傳 `tests/esp32_ld2410_full_test.py`；回復時移除重置與項目列表，並保留本紀錄。
+
+## CHG-20261120-069｜記錄參數設定策略：現階段改用 BLE APP，UART 命令列為延後項
+
+- **類別：**需求變更（決策與文件）。
+- **日期／紀錄時間：**2026-11-20 01:20:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者提出「製造商已提供 BLE APP 調參，似乎沒必要堅持 UART TX」。經核對，廠商並未移除 UART 命令（協議 V1.08 仍維護、PC 工具與 Arduino 函式庫皆使用），命令不通屬本機線路／腳位問題；但以目前單台教學專案而言，確實不構成阻礙。
+- **作法：**在 `apps/elder_care/README.md` 新增「參數設定策略」章節：說明現階段改用 HLKRadarTool（下載連結、廣播名、預設密碼、可調項目）、設定後必須人工記錄的表格（固件版本、兩個最大門、18 個靈敏度、無人延時、解析度、工程模式）、以及 UART 命令的取捨與三個值得回頭修的時機。未變更程式。
+- **影響：**文件新增；`hardware/ld2410.py` 的命令編碼與 `set_*` API 保留不動，待線路修好即可使用。
+- **驗證：**僅文件與決策紀錄，未新增硬體測試。既有的 71 項單元測試與 LD2410C 資料流驗證（10 Hz）不受影響。
+- **部署／回復：**文件隨版控發布；回復時移除該章節並保留本紀錄。
+
+## CHG-20261120-068｜記錄 LD2410C 的資料接收驗證（命令通道仍未通）
+
+- **類別：**需求變更（驗證紀錄）。
+- **日期／紀錄時間：**2026-11-20 01:10:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者換用 LD2410C 並要求確認「ESP32 的 UART RX 能收到模組資料」即可，不需再追命令通道。
+- **作法：**以 `tests/esp32_ld2410_full_test.py` 的 `run()` 在 LD2410C 上執行，記錄資料流、OUT 一致性、快照語義、命令編碼與命令通道的結果；文件第 4 節實測記錄新增一列。
+- **影響：**僅文件與紀錄，程式未變。
+- **驗證：**LD2410C 實機結果：資料流 **50 frames / 5.0 秒 = 10.0 Hz**、moving 30–140 cm、狀態 50 筆皆 moving_and_stationary；OUT 與 target_state 一致 0/10；快照 302 ms 轉 unknown；命令編碼四組全對；`firmware_version()`／`current_config()` 仍為 `ACK timeout: 0x00ff`。總計 PASS=6、FAIL=2（兩項皆命令通道）。
+- **部署／回復：**文件隨版控發布；回復時移除該列並保留本紀錄。
+
+## CHG-20261119-067｜將照護應用集中至 apps/elder_care 子目錄
+
+- **類別：**需求變更（專案結構整理）。
+- **日期／紀錄時間：**2026-11-19 23:40:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**照護相關程式原本散在 `services/` 與專案根目錄（兩個 demo），與一般服務混在一起不易辨識。使用者要求把應用程式與紀錄集中在一個子目錄。
+- **作法：**新增 `apps/` 與 `apps/elder_care/`（含 `__init__.py`）。移動 `services/radar_care.py` → `apps/elder_care/radar_care.py`、`services/bed_monitor.py` → `apps/elder_care/bed_monitor.py`；`radar_care_demo.py` → `apps/elder_care/care_demo.py`、`radar_bed_demo.py` → `apps/elder_care/bed_demo.py`。新增 `apps/elder_care/README.md` 作為設計紀錄（安裝位置與距離帶、事件表、三級告警、校準步驟、限制）。測試檔維持在 `tests/`，僅把 import 改為 `apps.elder_care.*`，確保 `python -B -m unittest discover -s tests` 仍涵蓋全部測試。demo 的 import 改為「先試套件路徑、失敗則把 `apps/elder_care` 加入 `sys.path`」，相容裝置上的扁平部署。`config.py`／`config.example.py` 的註解同步指向新路徑。
+- **影響：**對外 import 路徑變更：`services.radar_care` → `apps.elder_care.radar_care`、`services.bed_monitor` → `apps.elder_care.bed_monitor`。裝置上需上傳新的目錄結構；demo 執行路徑改為 `apps/elder_care/*.py`。設定值未變。
+- **驗證：**`python -B -m unittest discover -s tests` 共 71 項通過；`py_compile` 對四個搬移後的檔案通過；確認四個檔案已無 `services.radar_care`／`services.bed_monitor` 殘留引用。尚未在裝置上以新路徑執行 demo。
+- **部署／回復：**上傳 `apps/`、`config.py`；在 REPL 以 `exec(open('apps/elder_care/bed_demo.py').read())` 執行。回復時把兩個模組搬回 `services/`、demo 搬回根目錄並還原 import，同時保留本紀錄。
+
+## CHG-20261119-066｜地板告警改為三級升級並加入確認機制
+
+- **類別：**需求變更（告警策略）。
+- **日期／紀錄時間：**2026-11-19 22:00:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者指出照護場景應「寧可報錯、不可漏報」：長輩長時間停留在地板本身即值得關注，即使可能只是做地板運動。單一門檻無法兼顧「及早提醒」與「不讓照護者疲乏」，因此需要分級與確認。
+- **作法：**① `services/bed_monitor.py` 將 `floor_dwell_ms` 改為三個門檻：`floor_notice_ms`（30 秒）、`floor_alert_ms`（2 分鐘）、`floor_critical_ms`（10 分鐘），分別發出 `floor_notice`／`floor_alert`／`floor_critical`，每個等級每次地板事件只發一次；離開地板距離帶後自動重新武裝。② 新增 `acknowledge()`：照護者確認後停止本輪升級，離開地板帶後解除；`state()` 增加 `floor_acknowledged`。③ `config.py`／`config.example.py` 改為三個 `RADAR_BED_FLOOR_*` 門檻。④ 測試改寫為 4 項：三級依序觸發且不重複、站立不誤判、離開後重新武裝、確認後停止升級。
+- **影響：**事件名稱由 `floor_dwell` 改為三級，尚未接入主系統，故無外部相容性問題。`floor_alerts` 計數改為只計 alert 與 critical 兩級。
+- **驗證：**`python -B -m unittest discover -s tests` 共 71 項通過（原 70 + 1）。尚未實機驗證門檻是否合用。
+- **部署／回復：**上傳 `services/bed_monitor.py`、`config.py`；回復時改回單一 `floor_dwell_ms` 與單一事件，並保留本紀錄。
+
+## CHG-20261119-065｜bed_monitor 新增地板距離帶與 floor_dwell 事件
+
+- **類別：**需求變更（功能修正與擴充）。
+- **日期／紀錄時間：**2026-11-19 21:30:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**先前在對話中以「床墊厚 25 cm」估算躺床與躺地板的距離差，低估了實際值。使用者指出一般家庭床面離地約 45 cm，加上彈簧墊後至少 60 cm；依此重算，天花板安裝時「躺床」與「躺地板」的徑向距離差約 **55–75 cm**，遠大於量測誤差，足以用距離帶區分。
+- **作法：**① `services/bed_monitor.py` 新增 `floor_min_cm`／`floor_max_cm`／`floor_dwell_ms` 三個參數，當目標連續停留在「地板距離帶」超過門檻時發出 `floor_dwell` 事件，並在 `state()` 增加 `on_floor`、`floor_seconds`、`floor_alerts`。② 事件命名為 `floor_dwell` 而非 fall，語義是「長時間停留在這個高度，請人工確認」，避免宣稱跌倒偵測。③ `config.py` 與 `config.example.py` 新增 3 個 `RADAR_BED_FLOOR_*` 參數。④ `tests/test_bed_monitor.py` 新增 3 項測試：門檻到才觸發且不重複、站立距離不誤判、離開帶後可重新武裝。
+- **影響：**新增事件與參數，原有 turn／sit_up／leave_bed／return_bed 行為不變；尚未接入主系統。
+- **驗證：**`python -B -m unittest discover -s tests` 共 70 項通過（原 67 + 新增 3）。**尚未實機驗證**：地板距離帶需依實際天花板高度與床高校準，預設值 225–255 cm 只是範例。
+- **部署／回復：**上傳 `services/bed_monitor.py`、`config.py`；回復時移除三個參數與 floor 相關邏輯，並保留本紀錄。
+
+## CHG-20261119-064｜新增床鋪監測狀態機 bed_monitor 與校準示範程式
+
+- **類別：**需求變更（新功能）。
+- **日期／紀錄時間：**2026-11-19 20:30:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者要為睡眠情境實作翻身／起床／下床／回床偵測，需要可測試的狀態機，而現有 `radar_care` 只做「存在、久無活動、離床未回」的粗粒度判斷，沒有翻身與坐起的區分。
+- **作法：**① 新增 `services/bed_monitor.py`：以距離帶（`bed_min_cm`／`bed_max_cm`）、移動能量門檻、基線（躺著時的平滑距離）、去抖與確認時間推論四種事件（`turn`／`sit_up`／`leave_bed`／`return_bed`）；坐起判定採「移動能量達門檻且距離相對基線改變量 ≥ `sit_up_delta_cm`」，離床判定採「距離帶連續空 `exit_confirm_ms`」。② 新增 `tests/test_bed_monitor.py`（7 項，fake clock）：躺著建立基線、翻身、去抖、坐起、離床回床、unknown 不誤判、短暫離開不算離床。③ 新增 `radar_bed_demo.py` 校準／示範程式，每 200 ms 印出距離、能量、狀態與基線。④ `config.py` 與 `config.example.py` 新增 7 個 `RADAR_BED_*` 參數。
+- **影響：**新增檔案與設定；未接入 `main.py`／`tasks.py`。`bed_monitor` 與 `radar_care` 可同時使用：前者管睡眠事件，後者管存在與久無活動。
+- **驗證：**`python -B -m unittest discover -s tests` 共 67 項通過（原 60 + 新增 7）；`py_compile` 對 `services/bed_monitor.py`、`radar_bed_demo.py` 通過。**尚未在實機驗證**：床鋪距離帶與 `sit_up_delta_cm` 需依實際安裝位置校準，程式目前預設值只是起始值。
+- **部署／回復：**上傳 `services/bed_monitor.py`、`radar_bed_demo.py`、`config.py`，在 REPL 執行 `run(60)` 進行校準。回復時刪除兩個新檔與 `RADAR_BED_*` 設定，並保留本紀錄。
+
+## CHG-20261119-063｜補充 radar_care 床鋪判斷的設計說明
+
+- **類別：**需求變更（程式註解）。
+- **日期／紀錄時間：**2026-11-19 20:20:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**`_in_bed_range()` 同時檢查 `stationary_distance_cm` 與 `moving_distance_cm`，若不寫明理由，後續維護者容易誤以為其中一個是多餘的，或誤以為落後一個 frame 會影響判斷。
+- **作法：**在 `services/radar_care.py` 的 `_in_bed_range()` 加上 docstring：說明躺著不動時由 stationary 回報、翻身或起身時 moving 先出現；單看一個欄位會漏掉一半情境；約 100 ms 的落後對「以分鐘為單位」的規則沒有影響。僅新增說明，邏輯未變。
+- **影響：**無行為變更；8 項 `test_radar_care` 測試仍通過。
+- **驗證：**`python -B -m py_compile services/radar_care.py` 通過；`python -B -m unittest tests.test_radar_care` 8 項通過。
+- **部署／回復：**重新上傳 `services/radar_care.py` 即可；回復時移除該 docstring 並保留本紀錄。
+
+## CHG-20261119-062｜修正「stationary 不適合即時判斷」的過度陳述
+
+- **類別：**BUG（文件描述不精確）。
+- **日期／紀錄時間：**2026-11-19 20:10:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者指出 stationary 只落後一個 frame（約 100 ms），以人的尺度已足夠即時；原文件寫成「不適合做即時判斷」，容易被理解為延遲過大，與事實不符。
+- **作法：**改寫文件兩處：① 第 8.3 節把原因由「延遲」改為「語意」——stationary 描述的是靜止目標、快速移動時單一 frame 位移可達數十公分、能量為 0 時距離為殘值；明確寫出 100 ms 對人類尺度與分鐘級照護門檻都不是問題。② 第 4 節的實測觀察同步改寫，避免沿用舊說法。
+- **影響：**僅文件敘述修正，程式與參數未變；`services/radar_care.py` 的床鋪範圍判斷本來就同時檢查 stationary 與 moving，不受影響。
+- **驗證：**以既有實測數據重新檢視：stationary 落後恰為一個 frame（10 Hz 下 100 ms），且 0.6 s 時 moving=75、stationary=137 的差值來自「靜止目標」語意而非延遲。未新增硬體測試。
+- **部署／回復：**文件隨版控發布；回復時改回舊敘述並保留本紀錄。
+
+## CHG-20261119-061｜新增獨居長者照護規則服務 radar_care 與示範程式
+
+- **類別：**需求變更（新功能）。
+- **日期／紀錄時間：**2026-11-19 20:05:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者依 HLK 官方應用場景（人體感應燈控、生命防護、智慧安防等）挑選適合獨居長者照護的功能。經評估，現有雷達資料（距離、能量、目標狀態、OUT）已足以實作「久無活動」「離床未回」「夜間起身照明」三項，且不依賴尚未打通的命令通道（0x00FF 無 ACK，無法調參數）。
+- **作法：**① 新增純邏輯服務 `services/radar_care.py`：輸入雷達 snapshot，輸出事件（movement／wake_up／night_light／inactivity／bed_exit_overdue／away_too_long）與狀態（present、in_bed、idle_seconds、次數統計）；通訊逾時（state=unknown）不視為無人，計時器照常累計。② 新增 `tests/test_radar_care.py`（8 項，fake clock）覆蓋去抖、夜間判定、告警只觸發一次、回床／回房解除、unknown 語義、每日計數。③ 新增 `radar_care_demo.py` 獨立示範程式（直接控制 RGB LED，與 `ld2410b_bed_monitor_test.py` 相同模式，不可與 `main.py` 同時執行）。④ `config.py` 與 `config.example.py` 新增 12 個 `RADAR_CARE_*` 門檻值。
+- **影響：**新增檔案與設定；尚未接入 `main.py`、`tasks.py`、`web_server.py` 或 MQTT，因此不影響既有 LED single-owner 流程。事件設計為純資料，日後可由任務層轉成 LED 命令、Web API 或 MQTT 訊息。
+- **驗證：**`python -B -m unittest discover -s tests` 共 60 項通過（原 52 + 新增 8）；`py_compile` 對 `services/radar_care.py`、`radar_care_demo.py` 通過。尚未在 ESP32 實機執行示範程式。
+- **部署／回復：**上傳 `services/radar_care.py`、`radar_care_demo.py`、`config.py` 後，在 REPL 執行 `exec(open('radar_care_demo.py').read())` 再 `run(300)`。回復時刪除兩個新檔與 `RADAR_CARE_*` 設定，並保留本紀錄。
+
+## CHG-20261119-060｜記錄 LD2410B 完整功能測試實機結果
+
+- **類別：**需求變更（驗證紀錄）。
+- **日期／紀錄時間：**2026-11-19 19:55:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**以 `tests/esp32_ld2410_full_test.py` 在 ESP32 + LD2410B 上完成一次端到端測試，需把結果留檔，作為「已驗證」與「未驗證」的分界。
+- **作法：**文件第 4 節新增完整功能測試表（八個項目與數據），並補上兩個使用觀察：`stationary` 在快速移動時會跳動（0.6 s、1.8 s 兩個例子）、`detection_distance` 為變動值而非設定值。
+- **影響：**僅文件新增，程式與設定未變。
+- **驗證：**實機輸出：組態 PASS、資料流 50 frames / 5.0 s = 10.0 Hz、距離 69–123 cm、狀態分佈 39/11、OUT 一致 0/10、快照 ok→unknown（302 ms）、命令編碼四組全對、命令通道兩項 `ACK timeout: 0x00ff`；總計 PASS=6、FAIL=2。桌面 `python -B -m unittest discover -s tests` 52 項通過。
+- **部署／回復：**文件隨版控發布；回復時移除該表並保留本紀錄。
+
+## CHG-20261119-059｜新增 LD2410 完整功能測試程式 esp32_ld2410_full_test.py
+
+- **類別：**需求變更（測試工具）。
+- **日期／紀錄時間：**2026-11-19 19:45:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**先前 `selfcheck()`、`command_probe()`、`check.py` 各自只驗證片段功能，缺少一支能一次涵蓋「距離實際數值、狀態、OUT、快照語義、命令編碼、命令通道」並輸出 PASS／WARN／FAIL 總表的端到端測試。
+- **作法：**新增 `tests/esp32_ld2410_full_test.py`，`run(stream_seconds=5, ticks=10, interval_ms=200)` 依序執行：① 組態與腳位檢查；② 資料流統計（frames、Hz、moving／stationary 距離範圍、狀態分佈）；③ 即時讀值逐筆印出 distance／energy／detect／out 實際數字；④ OUT 與 `target_state` 一致性統計；⑤ 快照新鮮度語義（`stale_after_ms` 暫時設 100 ms，停 300 ms 後應由 `ok` 轉 `unknown`）；⑥ 命令編碼比對原廠範例（0x00FF、0x00FE、0x0060、0x0064 與 ACK 推算，不送出）；⑦ 命令通道（僅 `firmware_version()` 與 `current_config()`）。最後印出 PASS／WARN／FAIL／SKIP 總表與 driver stats。
+- **影響：**新增測試檔案，不改 driver 與設定。程式只送查詢類命令，不會寫入門檻或靈敏度。
+- **驗證：**桌面以 CPython 載入 `hardware/ld2410.py`（dummy UART）比對四組命令框，與原廠 PDF 範例逐一位元組相符（enter／exit／setmax／gate 全部 OK，ACK 推算 `ff 01` 正確）；`python -B -m py_compile` 通過；`python -B -m unittest discover -s tests` 52 項通過。實機尚未執行，命令通道預期仍為 FAIL。
+- **部署／回復：**上傳 `tests/esp32_ld2410_full_test.py` 至裝置根目錄，執行 `exec(open('esp32_ld2410_full_test.py').read())` 後呼叫 `run()`；回復時刪除該檔並保留本紀錄。
+
+## CHG-20261119-058｜寫入 LD2410B 的最終確認接線表
+
+- **類別：**需求變更（文件）。
+- **日期／紀錄時間：**2026-11-19 19:35:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者提供並要求確認最終接線：Pin-1 VCC→5V、Pin-2 GND→GND、Pin-3 UART_RX→GPIO15、Pin-4 UART_TX→GPIO16、Pin-5 OUT→GPIO14。五項皆有實測依據。
+- **作法：**文件新增第 3 節「確認的接線（LD2410B）」，逐腳列出功能、接到的 GPIO 與驗證方式，並附對應的 `config.py` 設定；原「實測記錄」順移為第 4 節，其後章節編號依序調整。
+- **影響：**文件結構變更，程式與設定未動。
+- **驗證：**每一項均對應先前實機量測：Pin-4 有 10 Hz 資料、Pin-5 由 1 變 0、Pin-1/2 由模組可運作推得、Pin-3 方向正確但命令尚未送達。未新增硬體測試。
+- **部署／回復：**文件隨版控發布；回復時移除該節並還原章節編號，保留本紀錄。
+
+## CHG-20261119-057｜確認 LD2410B 的 OUT 實際接線並修正相關提示
+
+- **類別：**BUG（文件與診斷訊息誤導）。
+- **日期／紀錄時間：**2026-11-19 19:30:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**先前依據照片推論「4 線排線未帶 OUT」，因此把 `out_level()` 的 `True` 判定為浮接值。使用者指出 OUT 實際有接；實測以 `Pin(14, Pin.IN)` 每 200 ms 取樣，離開偵測範圍後由 1 變 0 並穩定維持，再回到範圍內會變回 1，證明是推挽輸出而非浮接。
+- **作法：**① 文件第 3 節新增「LD2410B 的 OUT 已驗證」段落，記錄取樣結果與判讀依據，並移除「4 線排線」的錯誤推論。② `tests/esp32_ld2410_check.py` 的 OUT 提示由「未接 OUT、浮接不可信」改為「離開偵測範圍觀察 1→0，會穩定切換代表確實有接」。
+- **影響：**`config.py` 的 `LD2410B_OUT_PIN = 14` 維持不變；`out_level()` 與 `presence()` 可視為可信來源。僅文件與診斷訊息變更，driver 行為未動。
+- **驗證：**實機取樣 40 筆（每 200 ms）：774505–775506 為 1，775706 起轉為 0 並持續到 782308；符合人員離開偵測範圍的行為。`python -B -m py_compile tests/esp32_ld2410_check.py` 通過。
+- **部署／回復：**重新上傳 `tests/esp32_ld2410_check.py`；文件隨版控發布。回復時改回舊提示並保留本紀錄。
+
+## CHG-20261119-056｜更正 LD2410B 腳位順序（Pin-3=RX、Pin-4=TX）並記錄命令通道現況
+
+- **類別：**BUG（文件腳位錯誤）。
+- **日期／紀錄時間：**2026-11-19 19:15:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**先前文件與對話沿用「LD2410B 由 VCC 端數為 VCC/GND/TX/RX/OUT」，導致命令一直送進模組的 TX 腳而永遠等不到 ACK。實測顯示資料是從 GPIO16 進入，而 GPIO16 接的是 Pin-4，因此 Pin-4 必為模組的 UART_TX，Pin-3 為 UART_RX。
+- **作法：**更新 `元件/01_毫米波雷達/LD2410B_LD2410C_接線與實測記錄.md`：① 2.1 節 B 模組順序改為 `VCC、GND、RX、TX、OUT`；② 加上判定依據與「先前寫法錯誤」的說明；③ 2.3 對照表 B 欄的 TX／RX 互換；④ 第 3 節實測記錄改為「資料流成功、命令通道失敗」並附數據；⑤ 新增「LD2410B 命令通道的現況」段落，列出已排除與未排除的原因。
+- **影響：**文件與實機一致。程式（`config.py` 的 TX=15／RX=16）不需變更——方向本來就正確，錯的是模組端腳位的標註。
+- **驗證：**依 `tests/esp32_ld2410_check.py` 的實機輸出判定：資料流 30 frames / 3 秒 = 10 Hz、距離 217 cm；命令通道 `firmware` 與 `config` 皆 `ACK timeout: 0x00ff`；GPIO15↔GPIO16 loopback 可收回 14 bytes。尚未定位是排線或模組 RX。
+- **部署／回復：**文件隨版控發布；回復時改回舊版腳位表並保留本紀錄。
+
+## CHG-20261119-055｜新增一次性接線與驅動自檢程式 esp32_ld2410_check.py
+
+- **類別：**需求變更（診斷工具）。
+- **日期／紀錄時間：**2026-11-19 19:05:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**實測出現「資料流正常、命令通道無 ACK」，且腳位方向（模組 Pin-3 究竟是 TX 或 RX）在對話中一度混亂。需要一支以 driver 為基礎、只讀不寫、能同時驗證資料流／OUT／命令並給出結論的程式。
+- **作法：**新增 `tests/esp32_ld2410_check.py`：`run()` 依次印出接線規則（ESP32 TX → 模組 RX、ESP32 RX ← 模組 TX；LD2410B 由 VCC 端數為 VCC/GND/RX/TX/OUT）、以 `poll()` 統計 frames 與距離範圍、讀取 OUT、以 `firmware_version()` 與 `current_config()` 驗證命令通道（全部只查詢，不寫入設定），最後給出「資料流 / 命令通道」兩行結論與下一步檢查清單。
+- **影響：**新增診斷檔案，不改 driver。因只呼叫查詢類命令，失敗時不會改動模組設定。
+- **驗證：**`python -B -m py_compile` 通過；`python -B -m unittest discover -s tests` 52 項通過。尚未在裝置端執行。
+- **部署／回復：**上傳 `tests/esp32_ld2410_check.py` 後在 REPL 執行 `exec(open('esp32_ld2410_check.py').read())` 再 `run()`；回復時刪除該檔並保留本紀錄。
+
+## CHG-20261119-054｜command_probe() 加入回音辨識，區分「自己的命令」與「模組 ACK」
+
+- **類別：**需求變更（診斷工具）。
+- **日期／紀錄時間：**2026-11-19 17:50:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**實機執行 `command_probe()` 得到 `command frames: 1`，但收到的框與送出的框完全相同（`04 00`、命令字 `ff 00`），且 `data frames: 0`。這是 GPIO15／16 短接造成的回音，不是模組 ACK；原始輸出容易被誤讀成「模組回應了」。
+- **作法：**`tests/esp32_ld2410_smoke.py` 的 `command_probe()` 逐框比對是否等於送出的 frame，統計 `echoes`，並在「只收到回音」時直接印出判讀提示（提示真正的 ACK 應為 `08 00 ff 01 00 00 …`）。
+- **影響：**只影響診斷輸出，不改 driver。文件第 9.3 節後補一行說明回音的判讀方式。
+- **驗證：**`python -B -m py_compile tests/esp32_ld2410_smoke.py` 通過。依實機輸出（`fd fc fb fa 04 00 ff 00 01 00 04 03 02 01` 原樣回傳、`data frames: 0`）判定為 TX/RX 短接或模組訊號線未接；尚未取得重新接線後的結果。
+- **部署／回復：**重新上傳 `tests/esp32_ld2410_smoke.py`；回復時移除 echo 統計與提示即可。
+
+## CHG-20261119-053｜測試程式改為不自動執行，並補上裝置端執行步驟
+
+- **類別：**需求變更（測試程式可用性與文件）。
+- **日期／紀錄時間：**2026-11-19 17:40:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者在 Thonny Shell 以 `exec(open('esp32_ld2410_smoke.py').read())` 載入測試程式時，因檔案結尾的 `if __name__ == '__main__': run()` 立即執行完整 20 秒流程（selfcheck → info → raw → stream），才輪到想呼叫的 `command_probe()`，造成混淆與多餘等待。
+- **作法：**移除 `tests/esp32_ld2410_smoke.py` 的自動執行區塊，改為載入時印出一行可用函式提示；各功能改由使用者明確呼叫。文件新增第 9 節「在 ESP32 上執行測試程式（Thonny）」：裝置端檔案配置、上傳步驟、各函式耗時對照、以及不用 Thonny 時的 `mpremote` 指令。
+- **影響：**`exec()` 載入後不再自動跑 `run()`；若要完整流程仍可手動呼叫 `run()`。桌面端不受影響（本檔不在 unittest 清單內）。
+- **驗證：**`python -B -m py_compile tests/esp32_ld2410_smoke.py` 通過；`python -B -m unittest discover -s tests` 52 項通過。尚未在裝置端重新執行。
+- **部署／回復：**重新上傳 `tests/esp32_ld2410_smoke.py` 即可；回復時把 `if __name__ == '__main__': run()` 加回，並保留本紀錄。
+
+## CHG-20261119-052｜新增 command_probe() 診斷命令通道，確認 0x00FF 無 ACK
+
+- **類別：**需求變更（診斷工具）。
+- **日期／紀錄時間：**2026-11-19 16:55:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**實機執行 `info()` 時 `firmware_version()` 與 `current_config()` 都回 `LD2410 ACK timeout: 0x00ff`，但資料串流正常（15 秒 150 frames、距離 30–154 cm、OUT 正常）。需要分辨「命令沒送到模組」與「ACK 有回但比對失敗」。
+- **作法：**在 `tests/esp32_ld2410_smoke.py` 新增 `command_probe()`：繞過 ACK 比對，直接送出 `0x00FF` 原始命令框，印出 `uart.write()` 回傳值，並統計之後 800 ms 內收到的是命令框（`FD FC FB FA`）還是資料框，最後補送一次 `0x00FE` 讓模組回到工作模式。
+- **影響：**只增加診斷函式，不改 driver 行為；需注意執行後務必讓 `0x00FE` 送出成功，否則模組會停留在設定模式並停止上報資料。
+- **驗證：**已比對原廠 PDF：`0x00FF` 的成功 ACK 為 `FD FC FB FA 08 00 FF 01 00 00 01 00 40 00 04 03 02 01`，資料段前 4 bytes 為 `FF 01 00 00`，與 `_ack_command()` 的比對邏輯一致，因此 timeout 代表模組未回應而非比對錯誤。尚未取得實機的 probe 結果。
+- **部署／回復：**上傳 `tests/esp32_ld2410_smoke.py` 後在 REPL 執行 `command_probe()`；回復時移除該函式即可。
+
+## CHG-20261119-051｜實作 LD2410 參數與固件解碼、門靈敏度命令與 any() 讀取
+
+- **類別：**需求變更（driver 功能擴充）。
+- **日期／紀錄時間：**2026-11-19 16:45:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**`current_config()`／`firmware_version()` 原本只回原始位元組，設定類命令缺少門靈敏度；讀取迴圈使用無參數 `read()`，在 MicroPython 上會請求整個 RX 緩衝。原廠 PDF 與 `LD2410_repo` 已提供可核對的位元組配置。
+- **作法：**① `current_config()` 依 0x0061 回傳配置解碼（0xAA 標記、最大距離門、兩個最大門、18 個靈敏度、無人延時），長度或標記不符時丟 `LD2410CommandError`。② `firmware_version()` 解出 type／major／minor／bugfix 與 `V1.07.22091516` 形式字串。③ 新增 `set_gate_sensitivity(gate, moving, stationary)`（0x0064），以 `0xFFFF` 表示全部門。④ `_read_available()` 改用 `uart.any()` + `uart.read(n)`，後端無 `any()` 時才退回無參數 `read()`。⑤ `tests/esp32_ld2410_smoke.py` 新增 `info()`，於 `run()` 中印出固件版本與門／靈敏度設定。⑥ 文件新增第 8 節命令層 API 與原廠腳位編號慣例說明。
+- **影響：**`current_config()` 由回傳 bytes 改為回傳 dict（含 `raw`）；既有呼叫端需改讀欄位。其餘 API 不變。命令編碼與廠商文件一致，長度 18 bytes。
+- **驗證：**`python -B -m unittest discover -s tests` 共 52 項通過（新增固件解碼、門靈敏度編碼、`any()` 讀取三項）。測試使用廠商文件範例值（config：門 8/8/8、靈敏度 20/25、無人 5 秒；firmware：V1.07.22091516）。**尚未在實機驗證**這三項命令的回傳值與寫入結果。
+- **部署／回復：**上傳 `hardware/ld2410.py`、`tests/esp32_ld2410_smoke.py`；在 REPL 以 `info()` 核對。回復時改回僅回 `raw` 的版本並移除 `set_gate_sensitivity()`，保留本紀錄。
+
+## CHG-20261119-050｜建立本機 PDF 文字擷取流程（pypdf）並排除於版控
+
+- **類別：**需求變更（開發工具）。
+- **日期／紀錄時間：**2026-11-19 16:35:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**先前無法讀取 `元件/01_毫米波雷達` 內的 5 份原廠 PDF，協定數值只能靠第三方 repo 交叉推測。`pip install pypdf` 兩次失敗，錯誤為 `Permission denied`（DSH sandbox 不允許寫入系統 Temp 與 site-packages），並非網路問題。
+- **作法：**以 `--target .pdf-tools` 將 pypdf 7.1.1 安裝在工作區，並把 `TEMP`／`TMP` 指向工作區內的 `.tmp-pip`；新增 `.pdf-tools/pdf2txt.py`（pypdf → UTF-8 文字檔）與 `extract.py`。`.gitignore` 加入 `.pdf-tools/`、`.tmp-pip/`，避免把第三方套件與暫存檔提交。
+- **影響：**本機可將 PDF 轉為 UTF-8 文字再以一般工具檢索；不影響專案程式、設定或裝置部署。純掃描影像的 PDF 仍無文字層（例如天線罩指南 8 頁僅取到 21 行），需 OCR 才能處理。
+- **驗證：**已成功將 5 份 PDF 轉出：串口通信协议 22 頁、說明書 21 頁、底噪檢測 5 頁、APP 連結 1 頁可讀；天線罩指南無文字層。並以原廠 PDF 核對出 LD2410B 官方腳位定義表（1=OUT、2=UART_Tx、3=UART_Rx、4=GND、5=VCC），與使用者「由 VCC 端起算」的編號互為反向，兩者物理順序一致。
+- **部署／回復：**移除 `.pdf-tools/` 與 `.tmp-pip/` 即可；`.gitignore` 中對應兩行可一併移除。不涉及裝置。
+
+## CHG-20261119-049｜以實機擷取 frame 建立回歸 fixture，並記錄 stationary 落後一格
+
+- **類別：**需求變更（測試 fixture 與文件）。
+- **日期／紀錄時間：**2026-11-19 16:10:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者以 `hardware/ld2410.py` 連續讀取時，觀察到 `stationary_distance` 恆等於上一個 frame 的 `moving_distance`。為排除解析偏移，需以原始位元組判定；同時既有測試只用自行捏造的封包，缺少真實樣本。
+- **作法：**① 將使用者提供的 10 個實機 frame（LD2410C、256000 8N1、10 Hz）以 `REAL_CAPTURE` 納入 `tests/test_ld2410.py`，新增 `_frame_from_hex()` 與兩項測試：欄位偏移驗證、stationary 落後一格的行為固定。② 文件新增第 7 節「模組資料特性」，含 10 frame 對照表、結論（模組演算法延遲，非解析問題）、`detection_distance` 語義待確認、以及「能量 0 時距離為殘值」「stationary 不適合即時反應」兩個使用陷阱。
+- **影響：**測試由 47 項增至 49 項；程式行為未變更。文件對 `detection_distance` 改採「待確認」，不再沿用舊指南的「目前採用的探測距離」說法。
+- **驗證：**`python -B -m unittest discover -s tests` 共 49 項通過。落後一格在原始位元組即可直接觀察（第 2 個 frame 的 stationary = 0x5f = 95 = 第 1 個 frame 的 moving），因此判定為模組行為而非 driver 解析錯誤。尚未驗證：長時間穩定性、其他韌體版本的相同行為、`detection_distance` 確切語義。
+- **部署／回復：**測試與文件隨版控發布，無需上傳裝置。回復時移除 `REAL_CAPTURE` 與該兩項測試、刪除文件第 7 節，並保留本紀錄。
+
+## CHG-20261119-048｜同步 LD2410B 的 TX／RX 設定為 15／16，並讓測試與文件以 config 為準
+
+- **類別：**需求變更（硬體設定）＋ BUG（測試寫死腳位、公開範本未同步）。
+- **日期／紀錄時間：**2026-11-19 16:15:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**使用者以 LD2410B 實測成功，並將 `config.py` 改為 `LD2410B_TX_PIN = 15`、`LD2410B_RX_PIN = 16`。此設定使 GPIO16 成為 ESP32 的 RX，正好符合 LD2410B 的「Pin-3 TX → GPIO16」，也解釋了先前接線表與 `config.py` 的矛盾。
+- **作法：**① `config.example.py` 同步為 `TX=15`、`RX=16`（AGENTS.md 要求非機密設定同步）。② `tests/test_ld2410.py` 的建構參數測試改為由 `config` 推導 `tx`／`rx`，不再寫死 16／15，避免同類不一致再次發生。③ 改寫 `元件/01_毫米波雷達/LD2410B_LD2410C_接線與實測記錄.md`：以 `config.py` 為判斷基準，列出 B／C 兩種模組在同一組設定下的接線對照、兩個模組各自的針腳順序、以及「換模型或改 TX／RX 後必須重新核對」的檢查順序。
+- **影響：**預設接法變更為「模組 TX → GPIO16、模組 RX → GPIO15」。原本以 `TX=16`／`RX=15` 接線的 LD2410C 若沿用舊接法會變成 TX 對 TX，需改接（C 的 Pin-5 → GPIO16、Pin-4 → GPIO15）或把設定改回。程式邏輯未變。
+- **驗證：**`python -B -m unittest discover -s tests -v` 共 47 項通過（含 14 項 LD2410）。LD2410B 實機成功為使用者提供之結果（2026-11-19，設定 TX=15／RX=16）；LD2410C 的實機成功記錄為較早的 TX=16／RX=15。設定命令 ACK、工程模式等仍未在實機驗證。
+- **部署／回復：**上傳 `config.py`、`config.example.py`、`hardware/ld2410.py`、`tests/esp32_ld2410_smoke.py`。回復時把 `TX_PIN` 改回 16、`RX_PIN` 改回 15，並將模組兩條 UART 線對調；保留本紀錄。
+
+## CHG-20261119-047｜修正 LD2410 接線記錄：B 與 C 的針腳順序不同
+
+- **類別：**BUG（文件內容錯誤）＋ 需求變更（補充 LD2410B 實測接線）。
+- **日期／紀錄時間：**2026-11-19 16:02:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**`CHG-20261119-046` 依「LD2410B 與 LD2410C 腳位設計相同」撰寫，但使用者補充：LD2410B 為 `VCC GND TX RX OUT`、LD2410C 為 `VCC GND OUT RX TX`（針腳朝上由左數），兩者順序不同；並提供 LD2410B 剛完成的實測接線（Pin-3 TX→GPIO16、Pin-4 RX→GPIO15、Pin-5 OUT→GPIO14）。
+- **作法：**改寫並更名文件為 `元件/01_毫米波雷達/LD2410B_LD2410C_接線與實測記錄.md`：新增兩種模組各自的針腳序列、分別列出 B／C 接線表與對應 UART 設定、加入「換模組就要重新核對」的檢查順序。LD2410B 表加註唯一未定案點：表中模組 TX 接 GPIO16，但 `config.py` 將 GPIO16 視為 ESP32 TX，兩者需擇一，並列舉兩種可能與各自的解法。移除舊檔名 `LD2410C_接線與實測記錄.md`。
+- **影響：**修正後的文件不再宣稱兩種模組腳位相同；程式與設定未變更。
+- **驗證：**文件內容對照使用者提供的兩組接線與本次對話量測（LD2410C：GPIO15 收到資料框、GPIO14 OUT 變化）。LD2410B 的 TX／RX 方向與 `config.py` 的一致性仍未定案，文件中標為待確認，未宣稱單一結論。
+- **部署／回復：**文件隨版控發布；回復時改回 `CHG-20261119-046` 的檔名與內容，並保留本紀錄。
+
+## CHG-20261119-046｜新增 LD2410C 接線與實測記錄文件
+
+- **類別：**需求變更（文件）。
+- **日期／紀錄時間：**2026-11-19 15:38:06 +08:00，工具取得台北時間。
+- **原因：**使用者提供兩天實測所得的供電與接線資訊（5V 接 VCC、GPIO 對應表），要求寫入文件保留，避免日後重複排查。
+- **作法：**新增 `元件/01_毫米波雷達/LD2410C_接線與實測記錄.md`，內容包含供電要求、原廠絲印順序、使用者針腳編號表、實際跑通的接法、排查時序與教訓、待確認清單。使用者提供的針腳表以原文保留，並明確標註其 TX／RX 方向與已驗證接法相反、需以對調實驗確認，未擅自改寫成單一說法。
+- **影響：**新增文件，不改程式、設定或部署。文件作為 `hardware/ld2410.py` 與 `config.py` 接線設定的說明來源。
+- **驗證：**文件內容對照本次對話的量測數據（GPIO15 收到完整資料框、2 秒 253 bytes、GPIO14 OUT 取樣 `hi 211 / lo 39`、全腳位上拉掃描）。未執行新的硬體測試；TX／RX 方向尚未定案，因此文件標為「待確認」。
+- **部署／回復：**文件隨版控發布；回復時刪除該檔並保留本紀錄。
+
+## CHG-20261119-045｜將本機記憶庫目錄排除於版控之外
+
+- **類別：**需求變更（版控規則）。
+- **日期／紀錄時間：**2026-11-19 15:05:00 +08:00，工具取得台北時間。實際寫入時間以本次工具呼叫為準。
+- **原因：**工作區初次建立 `.dsh-meow/memory.db` 記憶庫；該檔位於隱藏目錄、預設不進版控、誤刪無法從回收站復原，且 `git status` 已顯示為未追蹤，若執行 `git add -A` 可能被誤提交。
+- **作法：**在 `.gitignore` 新增 `.dsh-meow/` 區塊並附註原因；未變更其他忽略規則。
+- **影響：**記憶庫檔案不會進入版控，也不影響既有規則；若日後要把記憶資料納入備份，應使用工具自身的備份機制而非 Git。
+- **驗證：**以 `git status --porcelain` 確認清單中不再出現 `.dsh-meow/`；未執行任何刪除或搬移。
+- **部署／回復：**移除 `.gitignore` 中該三行即可回復；不涉及程式、設定或裝置部署。
+
+## CHG-20261119-044｜改寫 LD2410 驅動為 ld2410.py，新增 OUT 讀取與 ESP32 實機測試程式
+
+- **類別：**需求變更（驅動重構與實機測試程式）＋ BUG（舊驅動無法取得 OUT；命名綁定 B 版）。
+- **日期／紀錄時間：**2026-11-19 14:48:55 +08:00，工具取得台北時間。
+- **原因：**使用者要求依 `ncmreynolds/ld2410` 倉儲與 `元件/01_毫米波雷達` 目錄內原廠文件，重建 MicroPython driver，並提供可經 driver 取得「距離（UART）」與「OUT 值」的測試程式。排查過程中 LD2410B 的 UART 完全無輸出（疑似故障），改用 LD2410C 後才收到完整資料框。
+- **現象與分析：**① `tests/test_ld2410b.py` 的 FakeUART 會依 `_ack_command()` 自行捏造 ACK，因此「桌面／裝置上測試通過」與「實機無任何資料」可以同時成立，測試無法證明接線。② 實機一度讀到 `len 0`、GPIO15/16 上拉仍為 0，最後確認為腳位／接線被拉低；恢復後 GPIO15 收到 `f4 f3 f2 f1 0d 00 02 aa 02 98 00 … 55 00 f8 f7 f6 f5`，2 秒共 253 bytes。③ 以 `src/ld2410.cpp` 核對後確認 ACK 為 `命令低位, 命令高位+1, 狀態(2)`，舊驅動假設正確，先前懷疑排除。
+- **作法：**`hardware/ld2410b.py` 更名為 `hardware/ld2410.py`，類別改為 `LD2410`；新增 `LD2410Timeout`、`LD2410CommandError`、`poll()`（非阻塞）、`snapshot()`（含 `age_ms` 與 `state: ok|unknown`）、`out_level()`、`presence()`、`stats()`、`current_config()`、`firmware_version()`、`set_max_distance_and_timeout()`、`engineering_mode()`、`restart()`。命令送出前先清空輸入緩衝，避免殘留 ACK 誤判；通訊失敗一律回報 `unknown`，不當成無人。保留 `hardware/ld2410b.py` 作為 shim（別名 `LD2410B`），讓 `ld2410b_bed_monitor_test.py` 不必修改。新增 `tests/esp32_ld2410_smoke.py`（`selfcheck()`、`raw()`、`stream()`、`run()`），只讀不送命令。`tests/test_ld2410b.py` 更名為 `tests/test_ld2410.py` 並擴充至 14 項；`config.py` 與 `config.example.py` 新增 `LD2410B_OUT_ACTIVE_HIGH`。
+- **影響：**`from hardware.ld2410b import LD2410B` 仍可用（shim），舊教材腳本不受影響；新程式建議 `from hardware.ld2410 import LD2410`。雷達尚未接入 `main.py`、`tasks.py` 或 Web 狀態。`current_config()` 與 `firmware_version()` 只回原始位元組，不宣稱欄位偏移。
+- **驗證：**桌面 `python -B -m unittest discover -s tests -v` 共 47 項全部通過，其中 LD2410 為 14 項（新增半包、假包頭、錯誤尾碼重新同步、ACK 逾時、ACK 狀態錯誤、錯誤 opcode、`poll()`、快照過期、OUT 與 presence）。`python -B -m py_compile` 對四個檔案通過。**ESP32 實機（ESP32-S3 + LD2410C）：** GPIO15 於 256000 baud 收到完整資料框，2 秒 253 bytes、`has header: True`；GPIO14（OUT）5 秒取樣為 `hi 211 / lo 39`，隨動作變化；三支腳上拉皆為 1。**尚未驗證：**實機的設定命令 ACK、工程模式、firmware／config 欄位解碼、長時間穩定性與距離精度。
+- **部署／回復：**上傳 `hardware/ld2410.py`（必要時含 `hardware/ld2410b.py`、`tests/esp32_ld2410_smoke.py`、`config.py`），在 REPL 執行 `exec(open('esp32_ld2410_smoke.py').read())` 後呼叫 `run()`。回復時以 `mdy_06/hardware/ld2410b.py` 還原舊驅動並移除 `hardware/ld2410.py`；`hardware/ld2410b.py` 在本次之前為未追蹤檔案，因此更名不涉及 Git 歷史改寫。不要覆蓋私人 `config.py`。
+
+## CHG-20261117-043｜新增 LD2410B 床邊呼吸候選與離床黃燈測試程式
+
+- **類別：**需求變更（LD2410B ESP32 實機情境測試）。
+- **日期／紀錄時間：**2026-11-17 21:37:52 +08:00，工具取得台北時間。
+- **原因：**需要先驗證約 0.5 m 床邊靜止目標的雷達資料、坐起／離床造成的距離與狀態變化，以及超出床鋪範圍時的三色 LED 黃燈反應。
+- **作法：**新增 `ld2410b_bed_monitor_test.py`。以 `stationary_energy` 在床鋪距離範圍內標示「呼吸候選」；以 target state 改變為移動、距離連續超出範圍兩筆確認離床，將 `RgbLed.write(6)` 設為紅綠同亮的黃色；回到床鋪範圍內並連續靜止三筆後熄燈重新武裝。床鋪範圍預設 25–100 cm，可由 `config.py` 的選用設定覆蓋。
+- **影響：**新增獨立測試程式，不接入 `main.py`、`tasks.py` 或既有 LED single-owner 流程；執行期間會直接控制 RGB LED，部署主程式時不可同時執行此測試。輸出使用「呼吸候選」，不宣稱醫療呼吸監測、跌倒偵測或照護警報。
+- **驗證：**已以 fake LED／fake frame smoke scenario 覆蓋約 50 cm 靜止高 stationary energy、移動且超出範圍後黃色、回床靜止後熄燈；已完成 CPython 語法檢查。尚未執行 ESP32、真實 LD2410B、床墊／姿勢、供電、接線或 LED 電氣驗證。
+- **部署／回復：**將 `ld2410b_bed_monitor_test.py`、`config.py`、`hardware/ld2410b.py` 與 `hardware/led.py` 上傳至 ESP32，確認雷達 TX/RX 交叉、共地、5 V 供電與 GPIO 電位後，在 REPL 執行 `exec(open('ld2410b_bed_monitor_test.py').read())`；測試結束以 Ctrl-C 停止並熄燈。回復時移除新增測試檔即可，不要覆蓋私人 `config.py`。
+
+## CHG-20261117-042｜修正 ESP32 MicroPython 不支援 bytearray 刪除切片
+
+- **類別：**BUG（ESP32 執行 fake-UART 測試時封包解析在 `del bytearray[...]` 失敗）。
+- **日期／紀錄時間：**2026-11-17 21:14:54 +08:00，工具取得台北時間。
+- **原因：**`hardware/ld2410b.py` 的 `_extract_frame()` 使用多處 `del self._buffer[...]`；使用者實際在 ESP32 執行測試時回報 `TypeError: 'bytearray' object doesn't support item deletion`。
+- **作法：**將封包緩衝區的前綴、雜訊、錯誤封包與已解析 frame 消費改為 bytearray slicing 後重新指派；建立 `mdy_06/hardware/ld2410b.py` 保存修改前版本。
+- **影響：**MicroPython 可繼續執行 LD2410B 分段封包、雜訊與命令 ACK fake-UART 測試；每次消費緩衝區會建立 slicing 結果，這是為了相容 ESP32 MicroPython，協定與 frame 邊界行為不變。
+- **驗證：**使用者已提供修改前 ESP32 實機錯誤；修正後需重新在同一 ESP32 執行完整 6 項測試。桌面測試與 MicroPython runner 模擬應同步執行，尚未以本紀錄宣稱新的 ESP32 實機結果。
+- **部署／回復：**重新上傳 `hardware/ld2410b.py` 後 soft reboot，再執行 `exec(open('test_ld2410b.py').read())`；回復時以 `mdy_06/hardware/ld2410b.py` 還原，並保留本紀錄。
+
+## CHG-20261117-041｜讓 LD2410B fake-UART 測試可直接在 ESP32 執行
+
+- **類別：**BUG（ESP32 執行測試時匯入桌面專用 `pathlib` 失敗）。
+- **日期／紀錄時間：**2026-11-17 20:45:30 +08:00，工具取得台北時間。
+- **原因：**`tests/test_ld2410b.py` 原本在檔案載入階段匯入 `pathlib` 與 `unittest.mock`，這些模組不屬於 ESP32 的 MicroPython 執行環境；使用者需要在裝置上執行同一組 LD2410B 協定 fake-UART 測試。
+- **作法：**將 `tests/test_ld2410b.py` 改為共用測試本體：桌面以 `unittest` 執行，MicroPython 以內建 runner 逐項執行並輸出 `ok`／`PASS`；以手動保存／還原模組屬性取代 `unittest.mock`，並以手動 little-endian 編碼取代 `int.to_bytes`。建立 `mdy_05/test_ld2410b.py` 保存修改前公開版本；未包含私人設定。
+- **影響：**可將 `test_ld2410b.py`、`config.py`、`hardware/ld2410b.py` 與 `hardware/__init__.py`（若部署環境需要）上傳到 ESP32 後執行 fake-UART 協定測試；測試仍不驗證真實 UART 接線、GPIO 電氣、雷達偵測、供電或實機時序。
+- **驗證：**桌面 `python -B -m unittest tests.test_ld2410b -v` 通過 6/6；以 CPython 保留標準匯入機制並切換 `sys.implementation.name='micropython'` 執行 MicroPython runner 分支通過 6/6；`py_compile` 通過，且測試檔不再包含 `pathlib`、`unittest.mock`、`int.to_bytes` 或 `int.from_bytes`。尚未連接並執行 ESP32 實機，不能宣稱實機通過。
+- **部署／回復：**建議將測試檔上傳至裝置根目錄為 `test_ld2410b.py`，並確保 `config.py` 與 `hardware/ld2410b.py` 可匯入，再於 REPL 執行 `exec(open('test_ld2410b.py').read())`；測試完成後不需保留測試檔。回復時以 `mdy_05/test_ld2410b.py` 還原，並保留本紀錄；不要覆蓋私人 `config.py`。
+
+## CHG-20261117-040｜新增 LD2410B 腳位組態與基本功能測試
+
+- **類別：**需求變更（毫米波雷達硬體組態與測試）。
+- **日期／紀錄時間：**2026-11-17 15:23:59 +08:00，工具取得台北時間。
+- **原因：**LD2410B 已移入 `hardware/`，需要把 UART、OUT 與預設 256000 baud 的接線設定納入本專案組態，並以測試固定官方文件所述的基本通訊行為。
+- **作法：**在本機 `config.py` 與公開 `config.example.py` 新增 `LD2410B_UART_ID`、`LD2410B_TX_PIN`、`LD2410B_RX_PIN`、`LD2410B_OUT_PIN` 與 `LD2410B_BAUDRATE`；目前選用尚未被既有配置使用的 GPIO 16、15、14。新增 `tests/test_ld2410b.py`，使用 fake UART 驗證正常／工程模式資料解析、雜訊與分段封包、UART 8N1 建構參數、進入／讀取／離開設定流程，以及最大距離門與無人時間命令編碼。公開原始設定快照保存於 `mdy_04/config.example.py`。
+- **影響：**應用程式可依組態建立 UART1：TX=16、RX=15、OUT=14；尚未將雷達加入 `main.py`、`tasks.py` 或 Web 狀態。GPIO 選擇是依目前專案配置避開衝突的初始接線方案，仍須依實際 ESP32-S2FN4R2-S2-Mini 板腳位與接線確認。
+- **驗證：**`python -B -m unittest tests.test_ld2410b -v` 通過，6 項測試全部通過。測試是桌面 fake UART；未驗證 OUT 電氣高低、UART TX/RX 實際接線、雷達偵測距離、電源、ESP32 排程或實機命令結果。
+- **部署／回復：**部署前依組態將模組 TX 接 ESP32 RX、模組 RX 接 ESP32 TX，並確認 5 V 供電、共地與 3.3 V UART 電位；上傳 `config.py` 與 `hardware/ld2410b.py`。回復時移除新增組態與 `tests/test_ld2410b.py`，或依 `mdy_04/config.example.py` 還原公開範本；不要覆蓋本機私人 WiFi profiles。
+
+## CHG-20261117-039｜將 LD2410B 驅動移至硬體抽象目錄
+
+- **類別：**需求變更（依專案架構整理程式位置）。
+- **日期／紀錄時間：**2026-11-17 15:18:24 +08:00，工具取得台北時間。
+- **原因：**新增的 `driver/ld2410b.py` 不符合目前架構；專案以 `hardware/` 放置實體周邊硬體抽象，且沒有 `driver/` 層級。
+- **作法：**將檔案移至 `hardware/ld2410b.py`；保留本輪原始檔快照於 `mdy_03/driver/ld2410b.py`，供學生比較與回復。
+- **影響：**檔案內容與 LD2410B UART 協定行為不變；後續應用程式應由 `from hardware.ld2410b import LD2410B` 匯入。尚未將雷達整合進 `main.py` 或任務流程。
+- **驗證：**已確認原始路徑不存在、目標路徑建立；`python -B -m py_compile hardware/ld2410b.py` 通過。未執行 ESP32、UART 電氣或雷達實機驗證。
+- **部署／回復：**部署時將 `hardware/ld2410b.py` 上傳至 ESP32 的對應硬體模組路徑；回復時可依本輪 `mdy_03/driver/ld2410b.py` 快照還原，並同步保留本紀錄。
+
 ## CHG-20261117-038｜發布新增毫米波雷達長照應用建議文件
 
 - **類別：**需求變更（GitHub 文件發布）。
@@ -45,6 +478,36 @@ Git commit hash 由歷史查詢取得；不要求把包含本紀錄的 commit ha
 - **驗證：**以 CPython `py_compile` 檢查 `ld2410b_micropython.py`；以 fake UART smoke test 驗證分段資料封包解析、little-endian 距離欄位、命令 ACK 解析與啟用設定命令封包；檢查 Markdown fenced code block 成對。未執行 Mermaid parser（新指南沒有 Mermaid 區塊）、ESP32 實機、實際電源／GPIO 電氣、PC 工具、藍牙 APP、OTA 或真實安裝場域驗證。
 - **部署／回復：**將兩個新增檔案複製到目標 `元件/01_毫米波雷達` 目錄即可；先使用獨立 UART 或斷開 PC／APP，再接入 ESP32。回復時移除該目錄新增的兩個檔案；不得用公開範例覆蓋任何含私人設定的檔案。
 
+
+## CHG-20261110-035｜產生 ESP32 IoT 系統資料流程圖
+
+- **類別：**需求變更（架構視覺化）。
+- **日期／紀錄時間：**2026-11-10 21:03:17 +08:00，工具取得台北時間。
+- **原因：**使用者要求使用 `archify` skill，依目前專案原始碼產生系統資料流程圖，說明感測輸入、Web／MQTT 介接、RAM 快照、LED 命令邊界與裝置／網路輸出。
+- **作法：**新增 `.archify/dataflow-esp32-iot-20261110-205717/candidate.json` 與 `iot-system-dataflow.html`；以 repository HEAD `43875f0515e839184731595d6a86bde075f929e5` 的 `main.py`、`tasks.py`、`web_server.py`、`services/`、`hardware/` 與 `communication/` 實作建立節點、資料流、來源行號與 RAM 非持久化限制。圖中保留 `CommandService` 與 `LedController` 的單一 LED owner 邊界，未把未實作的功能或資料庫加入目前流程。
+- **影響：**新增可在瀏覽器開啟的獨立資料流程圖，不改變 ESP32 韌體、API、組態或部署內容；圖中資料流是目前程式的責任與資料方向，不代表實機效能或端到端網路驗證。
+- **驗證：**Archify `finalize dataflow --quality showcase` 的 `validate`、`deliver`、`check` 與 `browser-check` 全部通過；產出 HTML SHA-256 為 `c0eccdf789f93920ede934a4768c7a607ae632f7ed34b2b5c59c1beb16028122`。未進行人工視覺審查、ESP32 實機、GPIO、WiFi 或真 MQTT Broker 驗證。
+- **部署／回復：**不需上傳 ESP32；分享或開啟 `.archify/dataflow-esp32-iot-20261110-205717/iot-system-dataflow.html`。回復時移除該 `.archify` 產出資料夾與本紀錄；不得以圖中的架構描述取代實機驗證。
+
+## CHG-20261027-034｜新增 `uasyncio` 教學講義與學生操作手冊
+
+- **類別：**需求變更（教學文件）。
+- **日期／紀錄時間：**2026-10-27 01:15:22 +08:00，工具取得台北時間。
+- **原因：**使用者要求根據本專案 `config.py` 的硬體配置，建立一份詳細的 MicroPython `uasyncio` 教學講義與學生操作手冊，並涵蓋 `uasyncio` 的重要功能、目前系統的非同步任務與可操作的硬體實驗。
+- **作法：**新增 `UASYNCIO_LECTURE.md`，說明 coroutine、`await`、事件迴圈、`run`、`create_task`、`gather`、`sleep`／`sleep_ms`、`Event`、`Lock`、timeout、取消、Queue、PIR 狀態機、SensorSnapshot、MQTT callback bridge、Web Server 與 LED single owner；新增 `UASYNCIO_STUDENT_MANUAL.md`，依目前 GPIO、I2C、SPI、ADC、PWM 與輪詢參數安排接線檢查、非同步任務、按鈕、感測器、PIR、喇叭、LED、MQTT、RFID、Web、錯誤注入、取消與綜合實作。文件明確區分目前已實作、延伸練習、桌面 fake 測試與 ESP32 實機驗證；未修改韌體、`config.py` 或部署設定，也未寫入私人 WiFi profiles。
+- **影響：**學生可用目前專案的實際程式路徑學習 `uasyncio`，並依硬體設定逐步操作；新增文件不改變裝置執行行為。教材中的 GPIO、門檻與輪詢時間以目前設定為基準，開發板變體、電氣接線、MicroPython 韌體、真 Broker 與實機長時間運作仍須另行驗證。
+- **驗證：**以 Mermaid 11.13.0 實際解析兩份教材的 11/11 個 Mermaid 區塊通過（講義 7/7、學生手冊 4/4）；Markdown fenced code block 平衡與文件結構檢查通過；新教材無私人 WiFi assignment strings，且非刻意尾端空白檢查通過；`python -B -m unittest discover -s tests -v` 通過 33/33；`node tests/test_led_polling.cjs` 與 `node tests/test_rfid_ui.cjs` 通過。未執行 ESP32 實機、真 Broker、GPIO 電氣或周邊端到端驗證。
+- **部署／回復：**只需同步 `UASYNCIO_LECTURE.md`、`UASYNCIO_STUDENT_MANUAL.md` 與 `ChangeLog.md`，不需上傳 ESP32。回復時以 Git revert 移除兩份教材與本紀錄；不得以教材中的公開範例覆蓋私人 `config.py`。
+
+## CHG-20261020-033｜記錄實體按鈕事件與 handler 架構決策
+
+- **類別：**需求變更（教學架構文件）。
+- **日期／紀錄時間：**2026-10-20 16:05:16 +08:00，工具取得台北時間。
+- **原因：**目前按鈕程式主要以 `wait_press()`／`wait_release()` 支援單次按下動作；使用者要求保存按下、放開、單擊、雙擊、長按、handler 非同步契約與事件派送責任的完整架構討論，避免未來擴充時把應用政策寫回硬體 driver。
+- **作法：**在 `SYSTEM_ARCHITECTURE.md` 第 7.1 節新增實體按鈕架構決策，區分硬體 driver、監測 task、bounded `ButtonEvent` queue、async dispatcher 與應用 handler；定義去彈跳後的 `pressed`／`released`、延遲判斷的 `single_click`／`double_click`、`long_press` 語意與事件順序；決定按鈕 handler 統一採 `async def handler(event)` 契約、預設依序執行，並記錄 polling、IRQ、handler 自動猜測及直接等待 handler 等替代方案的取捨。文件明確標示此為目標架構，尚未修改目前 ESP32 程式。
+- **影響：**只增加架構與教學說明，不改變目前按鈕、LED、MQTT 或部署行為；未來若實作，需另行新增 fake GPIO／fake clock 測試，並分開進行 ESP32 實際按鍵與電氣去彈跳驗證。
+- **驗證：**`git diff --check -- SYSTEM_ARCHITECTURE.md ChangeLog.md` 通過；以 Mermaid 11.13.0 解析 `SYSTEM_ARCHITECTURE.md` 的 1/1 個 Mermaid 區塊通過；`python -B -m unittest discover -s tests -v` 通過 33/33。未執行 ESP32 實機按鍵、GPIO 電氣或完整手勢 dispatcher 驗證。
+- **部署／回復：**只需同步 `SYSTEM_ARCHITECTURE.md` 與 `ChangeLog.md`，不需上傳 ESP32。回復時移除本紀錄及 `SYSTEM_ARCHITECTURE.md` 第 7.1 節；不得將尚未實作的手勢功能當成目前韌體能力。
 
 ## CHG-20261020-032｜保存 omp 免費 LLM API 評估指南
 

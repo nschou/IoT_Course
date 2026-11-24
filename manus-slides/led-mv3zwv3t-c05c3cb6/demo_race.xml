@@ -1,0 +1,41 @@
+<slide id="demo_race">
+  <background color="bg-page"/>
+  <shape type="rect" x="1240" y="40" width="8" height="8" fill="state-alert" corner-radius="4"/>
+  <shape type="rect" x="1220" y="40" width="8" height="8" fill="state-warn" corner-radius="4"/>
+  <shape type="rect" x="1200" y="40" width="8" height="8" fill="state-alert" corner-radius="4"/>
+  
+  <text x="60" y="40" width="1160" height="60" font="heading" color="text-main" anchor="middle">
+    <p>動態演示 3：按鈕與警示接近同時到達</p>
+  </text>
+  
+  <shape type="rect" x="60" y="140" width="560" height="240" fill="bg-card" corner-radius="12" stroke="state-normal" stroke-width="2"/>
+  <text x="80" y="160" width="520" height="40" font="heading" size="24" color="state-normal">
+    <p>A. 按鈕已執行</p>
+  </text>
+  <text x="80" y="220" width="520" height="140" font="body" color="text-muted" line-height="1.6">
+    <p>1. 按鈕 <span color="state-normal">cycle 已寫入 GPIO (綠 2)</span></p>
+    <p>2. 警示到達</p>
+    <p>3. 警示保存新綠色，結束後<span color="state-normal">恢復綠色</span></p>
+    <p><span color="state-normal">結果：不能撤銷已執行的操作。</span></p>
+  </text>
+
+  <shape type="rect" x="660" y="140" width="560" height="240" fill="bg-card" corner-radius="12" stroke="state-warn" stroke-width="2"/>
+  <text x="680" y="160" width="520" height="40" font="heading" size="24" color="state-warn">
+    <p>B. 按鈕已受理，但在 queue 未執行</p>
+  </text>
+  <text x="680" y="220" width="520" height="140" font="body" color="text-muted" line-height="1.6">
+    <p>1. 按鈕收到 accepted (但 GPIO 仍藍 1)</p>
+    <p>2. 警示到達，設定 reserved = true</p>
+    <p>3. <span color="state-alert">清空 queue，將 cycle 改為 rejected</span></p>
+    <p><span color="state-warn">結果：警示後恢復原藍色，不補做按鈕。</span></p>
+  </text>
+
+  <shape type="rect" x="60" y="420" width="1160" height="200" fill="bg-card" corner-radius="12" stroke="state-alert" stroke-width="2"/>
+  <text x="80" y="440" width="1120" height="40" font="heading" size="24" color="state-alert">
+    <p>C. 警示先受理，按鈕後來</p>
+  </text>
+  <text x="80" y="500" width="1120" height="100" font="body" color="text-main" line-height="1.6">
+    <p>警示一被受理，<span font="code" color="state-alert">reserved=true</span>。按鈕即使先於第一次紅亮按下，</p>
+    <p>也會立刻被拒絕。不排隊，不改正常狀態。</p>
+  </text>
+</slide>

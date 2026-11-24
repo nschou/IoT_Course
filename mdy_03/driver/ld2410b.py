@@ -29,7 +29,7 @@ class LD2410B:
         0x06: "noise_check_failed",
     }
 
-    def __init__(self, uart_id=1, tx=None, rx=None, uart=None, baudrate=256000):
+    def __init__(self, uart_id=1, tx=None, rx=None, uart=None, baudrate=115200):
         if uart is not None:
             self.uart = uart
         else:

@@ -1,0 +1,57 @@
+<slide id="demo_cycle">
+  <background color="bg-page"/>
+  <shape type="rect" x="1240" y="40" width="8" height="8" fill="state-normal" corner-radius="4"/>
+  <shape type="rect" x="1220" y="40" width="8" height="8" fill="bg-card" corner-radius="4"/>
+  <shape type="rect" x="1200" y="40" width="8" height="8" fill="bg-card" corner-radius="4"/>
+  
+  <text x="60" y="40" width="1160" height="60" font="heading" color="text-main" anchor="middle">
+    <p>動態演示 1：按一次按鈕，LED 何時才變色？</p>
+  </text>
+  
+  <shape type="rect" x="60" y="140" width="260" height="480" fill="bg-card" corner-radius="8"/>
+  <text x="80" y="160" width="220" height="40" font="body" color="text-muted" align="center"><p>1. Button Task</p></text>
+  
+  <shape type="rect" x="340" y="140" width="260" height="480" fill="bg-card" corner-radius="8"/>
+  <text x="360" y="160" width="220" height="40" font="body" color="text-muted" align="center"><p>2. submit()</p></text>
+  
+  <shape type="rect" x="620" y="140" width="260" height="480" fill="bg-card" corner-radius="8"/>
+  <text x="640" y="160" width="220" height="40" font="body" color="state-normal" align="center"><p>3. Owner Task</p></text>
+
+  <shape type="rect" x="900" y="140" width="260" height="480" fill="bg-card" corner-radius="8"/>
+  <text x="920" y="160" width="220" height="40" font="body" color="text-muted" align="center"><p>4. 狀態與輸出</p></text>
+
+  <!-- Step 1 -->
+  <text x="80" y="220" width="220" height="40" font="code" size="16" color="text-main"><p>wait_press()</p></text>
+  <text x="80" y="260" width="220" height="40" font="code" size="16" color="state-normal"><p>submit('cycle')</p></text>
+  
+  <!-- Step 2 -->
+  <shape type="line" x="260" y="280" width="120" height="0" stroke="state-normal" stroke-width="2"/>
+  <text x="360" y="280" width="220" height="60" font="code" size="16" color="text-main">
+    <p>建立 receipt 10</p>
+    <p>加入 _queue</p>
+  </text>
+  
+  <!-- State at Step 2 -->
+  <text x="920" y="280" width="220" height="60" font="code" size="16" color="state-warn">
+    <p>receipt = accepted</p>
+    <p>queue = [10]</p>
+  </text>
+  <shape type="line" x="580" y="310" width="340" height="0" stroke="text-muted" stroke-width="1"/>
+
+  <!-- Step 3 -->
+  <text x="640" y="360" width="220" height="60" font="code" size="16" color="text-main">
+    <p>_step 取出命令</p>
+    <p>推進正常色碼</p>
+  </text>
+  <text x="640" y="440" width="220" height="40" font="code" size="16" color="state-normal"><p>write(2)</p></text>
+  
+  <!-- Step 4 -->
+  <shape type="line" x="820" y="460" width="100" height="0" stroke="state-normal" stroke-width="2"/>
+  <text x="920" y="360" width="220" height="60" font="code" size="16" color="state-normal">
+    <p>正常色碼 = 2</p>
+    <p>receipt = executed</p>
+  </text>
+  <text x="920" y="440" width="220" height="40" font="code" size="16" color="state-normal"><p>GPIO = 綠色 2</p></text>
+  
+  <text x="80" y="560" width="500" height="40" font="body" color="text-muted"><p>Button Task 繼續等待放開，不再碰 LED</p></text>
+</slide>

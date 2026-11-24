@@ -1,0 +1,52 @@
+<slide id="data_model">
+  <background color="bg-page"/>
+  <shape type="rect" x="1240" y="40" width="8" height="8" fill="state-warn" corner-radius="4"/>
+  <shape type="rect" x="1220" y="40" width="8" height="8" fill="bg-card" corner-radius="4"/>
+  <shape type="rect" x="1200" y="40" width="8" height="8" fill="bg-card" corner-radius="4"/>
+  
+  <text x="60" y="40" width="1160" height="60" font="heading" color="text-main" anchor="middle">
+    <p>把五種資料分開，才不會把狀態混成一團</p>
+  </text>
+  
+  <text x="60" y="140" width="220" height="120" fill="bg-card" corner-radius="8" padding="20" font="body" color="text-muted">
+    <p font="code" size="24" color="text-main">1. 命令</p>
+    <p>想做什麼？</p>
+    <p color="state-normal">cycle</p>
+  </text>
+  
+  <text x="300" y="140" width="220" height="120" fill="bg-card" corner-radius="8" padding="20" font="body" color="text-muted">
+    <p font="code" size="24" color="text-main">2. 收據 (Receipt)</p>
+    <p>處理到哪裡？</p>
+    <p color="state-warn">accepted</p>
+  </text>
+
+  <text x="540" y="140" width="220" height="120" fill="bg-card" corner-radius="8" padding="20" font="body" color="text-muted">
+    <p font="code" size="24" color="text-main">3. 正常狀態</p>
+    <p>平常應顯示什麼？</p>
+    <p color="state-normal">藍色 1</p>
+  </text>
+
+  <text x="780" y="140" width="220" height="120" fill="bg-card" corner-radius="8" padding="20" font="body" color="text-muted">
+    <p font="code" size="24" color="text-main">4. 警示狀態</p>
+    <p>現在暫時做什麼？</p>
+    <p color="state-alert">第 2 次紅亮</p>
+  </text>
+
+  <text x="1020" y="140" width="200" height="120" fill="bg-card" corner-radius="8" padding="20" font="body" color="text-muted">
+    <p font="code" size="24" color="text-main">5. 實際輸出</p>
+    <p>此刻 GPIO 是什麼？</p>
+    <p color="state-alert">紅色 4</p>
+  </text>
+  
+  <shape type="rect" x="60" y="320" width="1160" height="200" fill="bg-card" corner-radius="12"/>
+  <text x="100" y="360" width="1080" height="40" font="heading" size="28" color="state-warn">
+    <p>Accepted 表示接單，不表示已執行</p>
+  </text>
+  <text x="100" y="420" width="1080" height="80" font="body" color="text-main" line-height="1.6">
+    <p>警示中可能同時存在「<span color="state-normal">正常色碼=藍1</span>」和「<span color="state-alert">實際輸出=紅4</span>」。這不矛盾，前者是完成後要回到的狀態。若把紅閃寫回正常色碼，按鈕循環與恢復就會混淆。</p>
+  </text>
+  
+  <text x="60" y="560" width="1160" height="80" font="code" size="22" color="state-warn" align="center" anchor="middle" fill="#00000040" corner-radius="8">
+    <p>reply = led_service.submit('cycle', 'button1')</p>
+  </text>
+</slide>

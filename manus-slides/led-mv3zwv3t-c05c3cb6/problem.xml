@@ -1,0 +1,38 @@
+<slide id="problem">
+  <background color="bg-page"/>
+  <shape type="rect" x="1240" y="40" width="8" height="8" fill="state-alert" corner-radius="4"/>
+  <shape type="rect" x="1220" y="40" width="8" height="8" fill="bg-card" corner-radius="4"/>
+  <shape type="rect" x="1200" y="40" width="8" height="8" fill="bg-card" corner-radius="4"/>
+  
+  <text x="60" y="40" width="1160" height="60" font="heading" color="text-main" anchor="middle">
+    <p>問題不是 GPIO，而是多個人同時想操作</p>
+  </text>
+  
+  <shape type="rect" x="60" y="140" width="540" height="520" fill="bg-card" corner-radius="12"/>
+  <text x="90" y="170" width="480" height="40" font="heading" size="24" color="state-alert">
+    <p>舊機制的錯亂現象</p>
+  </text>
+  <text x="90" y="240" width="480" height="380" font="body" color="text-muted" line-height="1.8">
+    <p>三個來源直接寫入同一個 GPIO，導致：</p>
+    <ul>
+      <li>紅閃還沒完成，中間插入了換色。</li>
+      <li>紅閃完成後，恢復到錯的顏色。</li>
+      <li>網頁以為可以按，後端卻仍在紅閃。</li>
+      <li>一個要求已接收未執行，卻被蓋掉。</li>
+      <li>紅閃時按住按鈕，結束後偷偷補做。</li>
+    </ul>
+  </text>
+  
+  <shape type="rect" x="640" y="140" width="580" height="520" fill="bg-card" corner-radius="12"/>
+  <text x="670" y="170" width="520" height="40" font="heading" size="24" color="state-normal">
+    <p>必須回答的四個問題</p>
+  </text>
+  <text x="670" y="240" width="520" height="380" font="body" color="text-main" line-height="1.8">
+    <ol>
+      <li><span color="state-normal">誰可以碰 LED？</span></li>
+      <li><span color="state-warn">同時來的要求怎麼排順序？</span></li>
+      <li><span color="state-alert">紅閃中的暫時畫面，如何不破壞平常狀態？</span></li>
+      <li><span color="state-web">畫面看到的狀態，如何不冒充控制權？</span></li>
+    </ol>
+  </text>
+</slide>

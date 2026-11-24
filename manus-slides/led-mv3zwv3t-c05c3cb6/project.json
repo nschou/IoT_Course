@@ -1,0 +1,189 @@
+{
+  "id": "led-mv3zwv3t-c05c3cb6",
+  "title": "三種需求，一個 LED：單一擁有者的控制架構",
+  "designType": "deck",
+  "resourceUri": "manus-resource://manus-slides/deck/led-mv3zwv3t-c05c3cb6",
+  "widgetUri": "manus-widget://manus-slides/studio/deck/led-mv3zwv3t-c05c3cb6",
+  "versionId": "v-mv402oe7-68f368e7",
+  "projectDir": "G:\\AsusWebStorage\\2025\\00_Teaching\\114-1-csie@nuu\\114-1-物聯網軟體架構\\99_All_07_refactor\\manus-slides\\led-mv3zwv3t-c05c3cb6",
+  "activeFile": "verification.xml",
+  "files": [
+    {
+      "path": "design.xml",
+      "mimeType": "text/xml",
+      "title": "design.xml",
+      "content": "<design>\n  <size width=\"1280\" height=\"720\"></size>\n  <color name=\"bg-page\" value=\"#0A1128\"/>\n  <color name=\"bg-card\" value=\"#1A233A\"/>\n  <color name=\"text-main\" value=\"#F8FAFC\"/>\n  <color name=\"text-muted\" value=\"#94A3B8\"/>\n  <color name=\"state-normal\" value=\"#3B82F6\"/>\n  <color name=\"state-alert\" value=\"#EF4444\"/>\n  <color name=\"state-warn\" value=\"#F59E0B\"/>\n  <color name=\"state-web\" value=\"#06B6D4\"/>\n  <font name=\"display\" family=\"Noto Sans TC\" size=\"48\"/>\n  <font name=\"heading\" family=\"Noto Sans TC\" size=\"32\"/>\n  <font name=\"body\" family=\"Noto Sans TC\" size=\"20\"/>\n  <font name=\"code\" family=\"Roboto Mono\" size=\"18\"/>\n  <font name=\"caption\" family=\"Noto Sans TC\" size=\"14\"/>\n</design>"
+    },
+    {
+      "path": "cover.xml",
+      "mimeType": "text/xml",
+      "title": "cover.xml",
+      "content": "<slide id=\"cover\">\n  <background color=\"bg-page\"/>\n  <shape type=\"rect\" x=\"1240\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-normal\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1220\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-warn\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1200\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-alert\" corner-radius=\"4\"/>\n  \n  <text x=\"140\" y=\"240\" width=\"1000\" height=\"80\" font=\"display\" size=\"64\" color=\"text-main\" align=\"center\" anchor=\"middle\">\n    <p>三種需求，一個 LED</p>\n  </text>\n  <text x=\"140\" y=\"340\" width=\"1000\" height=\"60\" font=\"heading\" color=\"state-normal\" align=\"center\" anchor=\"middle\">\n    <p>單一擁有者的控制架構</p>\n  </text>\n  <text x=\"140\" y=\"420\" width=\"1000\" height=\"40\" font=\"body\" color=\"text-muted\" align=\"center\" anchor=\"middle\">\n    <p>實體按鈕、網頁控制與低光警示的資源仲裁</p>\n  </text>\n  \n  <shape type=\"rect\" x=\"340\" y=\"520\" width=\"160\" height=\"60\" fill=\"bg-card\" corner-radius=\"8\"/>\n  <text x=\"340\" y=\"520\" width=\"160\" height=\"60\" font=\"body\" color=\"text-main\" align=\"center\" anchor=\"middle\"><p>實體按鈕</p></text>\n  \n  <shape type=\"rect\" x=\"560\" y=\"520\" width=\"160\" height=\"60\" fill=\"bg-card\" corner-radius=\"8\"/>\n  <text x=\"560\" y=\"520\" width=\"160\" height=\"60\" font=\"body\" color=\"state-web\" align=\"center\" anchor=\"middle\"><p>網頁按鈕</p></text>\n  \n  <shape type=\"rect\" x=\"780\" y=\"520\" width=\"160\" height=\"60\" fill=\"bg-card\" corner-radius=\"8\"/>\n  <text x=\"780\" y=\"520\" width=\"160\" height=\"60\" font=\"body\" color=\"state-alert\" align=\"center\" anchor=\"middle\"><p>低光警示</p></text>\n  \n  <shape type=\"line\" x=\"420\" y=\"580\" width=\"220\" height=\"80\" stroke=\"text-muted\" stroke-width=\"2\"/>\n  <shape type=\"line\" x=\"640\" y=\"580\" width=\"0\" height=\"80\" stroke=\"text-muted\" stroke-width=\"2\"/>\n  <shape type=\"line\" x=\"860\" y=\"580\" width=\"-220\" height=\"80\" stroke=\"text-muted\" stroke-width=\"2\"/>\n  \n  <shape type=\"rect\" x=\"610\" y=\"660\" width=\"60\" height=\"60\" fill=\"state-normal\" corner-radius=\"30\"/>\n  <text x=\"610\" y=\"660\" width=\"60\" height=\"60\" font=\"body\" color=\"bg-page\" align=\"center\" anchor=\"middle\"><p>LED</p></text>\n</slide>"
+    },
+    {
+      "path": "problem.xml",
+      "mimeType": "text/xml",
+      "title": "problem.xml",
+      "content": "<slide id=\"problem\">\n  <background color=\"bg-page\"/>\n  <shape type=\"rect\" x=\"1240\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-alert\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1220\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1200\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  \n  <text x=\"60\" y=\"40\" width=\"1160\" height=\"60\" font=\"heading\" color=\"text-main\" anchor=\"middle\">\n    <p>問題不是 GPIO，而是多個人同時想操作</p>\n  </text>\n  \n  <shape type=\"rect\" x=\"60\" y=\"140\" width=\"540\" height=\"520\" fill=\"bg-card\" corner-radius=\"12\"/>\n  <text x=\"90\" y=\"170\" width=\"480\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-alert\">\n    <p>舊機制的錯亂現象</p>\n  </text>\n  <text x=\"90\" y=\"240\" width=\"480\" height=\"380\" font=\"body\" color=\"text-muted\" line-height=\"1.8\">\n    <p>三個來源直接寫入同一個 GPIO，導致：</p>\n    <ul>\n      <li>紅閃還沒完成，中間插入了換色。</li>\n      <li>紅閃完成後，恢復到錯的顏色。</li>\n      <li>網頁以為可以按，後端卻仍在紅閃。</li>\n      <li>一個要求已接收未執行，卻被蓋掉。</li>\n      <li>紅閃時按住按鈕，結束後偷偷補做。</li>\n    </ul>\n  </text>\n  \n  <shape type=\"rect\" x=\"640\" y=\"140\" width=\"580\" height=\"520\" fill=\"bg-card\" corner-radius=\"12\"/>\n  <text x=\"670\" y=\"170\" width=\"520\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-normal\">\n    <p>必須回答的四個問題</p>\n  </text>\n  <text x=\"670\" y=\"240\" width=\"520\" height=\"380\" font=\"body\" color=\"text-main\" line-height=\"1.8\">\n    <ol>\n      <li><span color=\"state-normal\">誰可以碰 LED？</span></li>\n      <li><span color=\"state-warn\">同時來的要求怎麼排順序？</span></li>\n      <li><span color=\"state-alert\">紅閃中的暫時畫面，如何不破壞平常狀態？</span></li>\n      <li><span color=\"state-web\">畫面看到的狀態，如何不冒充控制權？</span></li>\n    </ol>\n  </text>\n</slide>"
+    },
+    {
+      "path": "architecture.xml",
+      "mimeType": "text/xml",
+      "title": "architecture.xml",
+      "content": "<slide id=\"architecture\">\n  <background color=\"bg-page\"/>\n  <shape type=\"rect\" x=\"1240\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-normal\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1220\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-normal\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1200\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-normal\" corner-radius=\"4\"/>\n  \n  <text x=\"60\" y=\"40\" width=\"1160\" height=\"60\" font=\"heading\" color=\"text-main\" anchor=\"middle\">\n    <p>一個受理窗口，一位 LED 工作員</p>\n  </text>\n  \n  <text x=\"60\" y=\"120\" width=\"160\" height=\"40\" font=\"body\" color=\"text-muted\" align=\"center\"><p>提出要求</p></text>\n  <shape type=\"rect\" x=\"60\" y=\"180\" width=\"160\" height=\"60\" fill=\"bg-card\" corner-radius=\"8\" stroke=\"text-muted\" stroke-width=\"2\"/>\n  <text x=\"60\" y=\"180\" width=\"160\" height=\"60\" font=\"body\" color=\"text-main\" align=\"center\" anchor=\"middle\"><p>實體按鈕</p></text>\n  <shape type=\"rect\" x=\"60\" y=\"300\" width=\"160\" height=\"60\" fill=\"bg-card\" corner-radius=\"8\" stroke=\"state-web\" stroke-width=\"2\"/>\n  <text x=\"60\" y=\"300\" width=\"160\" height=\"60\" font=\"body\" color=\"state-web\" align=\"center\" anchor=\"middle\"><p>網頁按鈕</p></text>\n  <shape type=\"rect\" x=\"60\" y=\"420\" width=\"160\" height=\"60\" fill=\"bg-card\" corner-radius=\"8\" stroke=\"state-alert\" stroke-width=\"2\"/>\n  <text x=\"60\" y=\"420\" width=\"160\" height=\"60\" font=\"body\" color=\"state-alert\" align=\"center\" anchor=\"middle\"><p>光照感測</p></text>\n\n  <shape type=\"line\" x=\"220\" y=\"210\" width=\"100\" height=\"120\" stroke=\"text-muted\" stroke-width=\"2\"/>\n  <shape type=\"line\" x=\"220\" y=\"330\" width=\"100\" height=\"0\" stroke=\"text-muted\" stroke-width=\"2\"/>\n  <shape type=\"line\" x=\"220\" y=\"450\" width=\"100\" height=\"-120\" stroke=\"state-alert\" stroke-width=\"2\"/>\n  \n  <text x=\"320\" y=\"120\" width=\"220\" height=\"40\" font=\"body\" color=\"text-muted\" align=\"center\"><p>受理</p></text>\n  <shape type=\"rect\" x=\"320\" y=\"270\" width=\"220\" height=\"120\" fill=\"bg-card\" corner-radius=\"8\"/>\n  <text x=\"320\" y=\"290\" width=\"220\" height=\"40\" font=\"code\" color=\"text-main\" align=\"center\"><p>submit()</p></text>\n  <text x=\"320\" y=\"340\" width=\"220\" height=\"40\" font=\"body\" size=\"16\" color=\"text-muted\" align=\"center\"><p>檢查忙碌、給 ID</p></text>\n\n  <shape type=\"line\" x=\"540\" y=\"330\" width=\"100\" height=\"0\" stroke=\"text-muted\" stroke-width=\"2\"/>\n\n  <text x=\"640\" y=\"120\" width=\"220\" height=\"40\" font=\"body\" color=\"state-warn\" align=\"center\"><p>排隊</p></text>\n  <shape type=\"rect\" x=\"640\" y=\"270\" width=\"220\" height=\"120\" fill=\"bg-card\" corner-radius=\"8\" stroke=\"state-warn\" stroke-width=\"2\"/>\n  <text x=\"640\" y=\"290\" width=\"220\" height=\"40\" font=\"code\" color=\"state-warn\" align=\"center\"><p>_queue</p></text>\n  <text x=\"640\" y=\"340\" width=\"220\" height=\"40\" font=\"body\" size=\"16\" color=\"text-muted\" align=\"center\"><p>最多 8 筆</p></text>\n\n  <shape type=\"line\" x=\"860\" y=\"330\" width=\"100\" height=\"0\" stroke=\"text-muted\" stroke-width=\"2\"/>\n\n  <text x=\"960\" y=\"120\" width=\"220\" height=\"40\" font=\"body\" color=\"state-normal\" align=\"center\"><p>執行與硬體</p></text>\n  <shape type=\"rect\" x=\"960\" y=\"180\" width=\"220\" height=\"120\" fill=\"bg-card\" corner-radius=\"8\" stroke=\"state-normal\" stroke-width=\"2\"/>\n  <text x=\"960\" y=\"200\" width=\"220\" height=\"40\" font=\"code\" color=\"state-normal\" align=\"center\"><p>owner task</p></text>\n  <text x=\"960\" y=\"250\" width=\"220\" height=\"40\" font=\"body\" size=\"16\" color=\"text-muted\" align=\"center\"><p>唯一寫入者</p></text>\n\n  <shape type=\"line\" x=\"1070\" y=\"300\" width=\"0\" height=\"60\" stroke=\"state-normal\" stroke-width=\"2\"/>\n\n  <shape type=\"rect\" x=\"960\" y=\"360\" width=\"220\" height=\"120\" fill=\"bg-card\" corner-radius=\"8\"/>\n  <text x=\"960\" y=\"380\" width=\"220\" height=\"40\" font=\"code\" color=\"text-main\" align=\"center\"><p>RgbLed.write()</p></text>\n  <text x=\"960\" y=\"430\" width=\"220\" height=\"40\" font=\"body\" size=\"16\" color=\"text-muted\" align=\"center\"><p>寫入 GPIO</p></text>\n  \n  <text x=\"60\" y=\"580\" width=\"1160\" height=\"80\" font=\"body\" size=\"24\" color=\"state-warn\" align=\"center\" anchor=\"middle\" fill=\"bg-card\" corner-radius=\"8\">\n    <p>三個來源可以提出要求，但一個 LED 同一時間只能有一個真正的操作者。</p>\n  </text>\n</slide>"
+    },
+    {
+      "path": "data_model.xml",
+      "mimeType": "text/xml",
+      "title": "data_model.xml",
+      "content": "<slide id=\"data_model\">\n  <background color=\"bg-page\"/>\n  <shape type=\"rect\" x=\"1240\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-warn\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1220\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1200\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  \n  <text x=\"60\" y=\"40\" width=\"1160\" height=\"60\" font=\"heading\" color=\"text-main\" anchor=\"middle\">\n    <p>把五種資料分開，才不會把狀態混成一團</p>\n  </text>\n  \n  <text x=\"60\" y=\"140\" width=\"220\" height=\"120\" fill=\"bg-card\" corner-radius=\"8\" padding=\"20\" font=\"body\" color=\"text-muted\">\n    <p font=\"code\" size=\"24\" color=\"text-main\">1. 命令</p>\n    <p>想做什麼？</p>\n    <p color=\"state-normal\">cycle</p>\n  </text>\n  \n  <text x=\"300\" y=\"140\" width=\"220\" height=\"120\" fill=\"bg-card\" corner-radius=\"8\" padding=\"20\" font=\"body\" color=\"text-muted\">\n    <p font=\"code\" size=\"24\" color=\"text-main\">2. 收據 (Receipt)</p>\n    <p>處理到哪裡？</p>\n    <p color=\"state-warn\">accepted</p>\n  </text>\n\n  <text x=\"540\" y=\"140\" width=\"220\" height=\"120\" fill=\"bg-card\" corner-radius=\"8\" padding=\"20\" font=\"body\" color=\"text-muted\">\n    <p font=\"code\" size=\"24\" color=\"text-main\">3. 正常狀態</p>\n    <p>平常應顯示什麼？</p>\n    <p color=\"state-normal\">藍色 1</p>\n  </text>\n\n  <text x=\"780\" y=\"140\" width=\"220\" height=\"120\" fill=\"bg-card\" corner-radius=\"8\" padding=\"20\" font=\"body\" color=\"text-muted\">\n    <p font=\"code\" size=\"24\" color=\"text-main\">4. 警示狀態</p>\n    <p>現在暫時做什麼？</p>\n    <p color=\"state-alert\">第 2 次紅亮</p>\n  </text>\n\n  <text x=\"1020\" y=\"140\" width=\"200\" height=\"120\" fill=\"bg-card\" corner-radius=\"8\" padding=\"20\" font=\"body\" color=\"text-muted\">\n    <p font=\"code\" size=\"24\" color=\"text-main\">5. 實際輸出</p>\n    <p>此刻 GPIO 是什麼？</p>\n    <p color=\"state-alert\">紅色 4</p>\n  </text>\n  \n  <shape type=\"rect\" x=\"60\" y=\"320\" width=\"1160\" height=\"200\" fill=\"bg-card\" corner-radius=\"12\"/>\n  <text x=\"100\" y=\"360\" width=\"1080\" height=\"40\" font=\"heading\" size=\"28\" color=\"state-warn\">\n    <p>Accepted 表示接單，不表示已執行</p>\n  </text>\n  <text x=\"100\" y=\"420\" width=\"1080\" height=\"80\" font=\"body\" color=\"text-main\" line-height=\"1.6\">\n    <p>警示中可能同時存在「<span color=\"state-normal\">正常色碼=藍1</span>」和「<span color=\"state-alert\">實際輸出=紅4</span>」。這不矛盾，前者是完成後要回到的狀態。若把紅閃寫回正常色碼，按鈕循環與恢復就會混淆。</p>\n  </text>\n  \n  <text x=\"60\" y=\"560\" width=\"1160\" height=\"80\" font=\"code\" size=\"22\" color=\"state-warn\" align=\"center\" anchor=\"middle\" fill=\"#00000040\" corner-radius=\"8\">\n    <p>reply = led_service.submit('cycle', 'button1')</p>\n  </text>\n</slide>"
+    },
+    {
+      "path": "demo_cycle.xml",
+      "mimeType": "text/xml",
+      "title": "demo_cycle.xml",
+      "content": "<slide id=\"demo_cycle\">\n  <background color=\"bg-page\"/>\n  <shape type=\"rect\" x=\"1240\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-normal\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1220\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1200\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  \n  <text x=\"60\" y=\"40\" width=\"1160\" height=\"60\" font=\"heading\" color=\"text-main\" anchor=\"middle\">\n    <p>動態演示 1：按一次按鈕，LED 何時才變色？</p>\n  </text>\n  \n  <shape type=\"rect\" x=\"60\" y=\"140\" width=\"260\" height=\"480\" fill=\"bg-card\" corner-radius=\"8\"/>\n  <text x=\"80\" y=\"160\" width=\"220\" height=\"40\" font=\"body\" color=\"text-muted\" align=\"center\"><p>1. Button Task</p></text>\n  \n  <shape type=\"rect\" x=\"340\" y=\"140\" width=\"260\" height=\"480\" fill=\"bg-card\" corner-radius=\"8\"/>\n  <text x=\"360\" y=\"160\" width=\"220\" height=\"40\" font=\"body\" color=\"text-muted\" align=\"center\"><p>2. submit()</p></text>\n  \n  <shape type=\"rect\" x=\"620\" y=\"140\" width=\"260\" height=\"480\" fill=\"bg-card\" corner-radius=\"8\"/>\n  <text x=\"640\" y=\"160\" width=\"220\" height=\"40\" font=\"body\" color=\"state-normal\" align=\"center\"><p>3. Owner Task</p></text>\n\n  <shape type=\"rect\" x=\"900\" y=\"140\" width=\"260\" height=\"480\" fill=\"bg-card\" corner-radius=\"8\"/>\n  <text x=\"920\" y=\"160\" width=\"220\" height=\"40\" font=\"body\" color=\"text-muted\" align=\"center\"><p>4. 狀態與輸出</p></text>\n\n  <!-- Step 1 -->\n  <text x=\"80\" y=\"220\" width=\"220\" height=\"40\" font=\"code\" size=\"16\" color=\"text-main\"><p>wait_press()</p></text>\n  <text x=\"80\" y=\"260\" width=\"220\" height=\"40\" font=\"code\" size=\"16\" color=\"state-normal\"><p>submit('cycle')</p></text>\n  \n  <!-- Step 2 -->\n  <shape type=\"line\" x=\"260\" y=\"280\" width=\"120\" height=\"0\" stroke=\"state-normal\" stroke-width=\"2\"/>\n  <text x=\"360\" y=\"280\" width=\"220\" height=\"60\" font=\"code\" size=\"16\" color=\"text-main\">\n    <p>建立 receipt 10</p>\n    <p>加入 _queue</p>\n  </text>\n  \n  <!-- State at Step 2 -->\n  <text x=\"920\" y=\"280\" width=\"220\" height=\"60\" font=\"code\" size=\"16\" color=\"state-warn\">\n    <p>receipt = accepted</p>\n    <p>queue = [10]</p>\n  </text>\n  <shape type=\"line\" x=\"580\" y=\"310\" width=\"340\" height=\"0\" stroke=\"text-muted\" stroke-width=\"1\"/>\n\n  <!-- Step 3 -->\n  <text x=\"640\" y=\"360\" width=\"220\" height=\"60\" font=\"code\" size=\"16\" color=\"text-main\">\n    <p>_step 取出命令</p>\n    <p>推進正常色碼</p>\n  </text>\n  <text x=\"640\" y=\"440\" width=\"220\" height=\"40\" font=\"code\" size=\"16\" color=\"state-normal\"><p>write(2)</p></text>\n  \n  <!-- Step 4 -->\n  <shape type=\"line\" x=\"820\" y=\"460\" width=\"100\" height=\"0\" stroke=\"state-normal\" stroke-width=\"2\"/>\n  <text x=\"920\" y=\"360\" width=\"220\" height=\"60\" font=\"code\" size=\"16\" color=\"state-normal\">\n    <p>正常色碼 = 2</p>\n    <p>receipt = executed</p>\n  </text>\n  <text x=\"920\" y=\"440\" width=\"220\" height=\"40\" font=\"code\" size=\"16\" color=\"state-normal\"><p>GPIO = 綠色 2</p></text>\n  \n  <text x=\"80\" y=\"560\" width=\"500\" height=\"40\" font=\"body\" color=\"text-muted\"><p>Button Task 繼續等待放開，不再碰 LED</p></text>\n</slide>"
+    },
+    {
+      "path": "demo_alert.xml",
+      "mimeType": "text/xml",
+      "title": "demo_alert.xml",
+      "content": "<slide id=\"demo_alert\">\n  <background color=\"bg-page\"/>\n  <shape type=\"rect\" x=\"1240\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-alert\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1220\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1200\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  \n  <text x=\"60\" y=\"40\" width=\"1160\" height=\"60\" font=\"heading\" color=\"text-main\" anchor=\"middle\">\n    <p>動態演示 2：低光警示如何保護原本狀態？</p>\n  </text>\n  \n  <shape type=\"rect\" x=\"60\" y=\"140\" width=\"1160\" height=\"60\" fill=\"bg-card\" corner-radius=\"8\"/>\n  <text x=\"80\" y=\"140\" width=\"140\" height=\"60\" font=\"body\" color=\"text-muted\" anchor=\"middle\"><p>初始狀態</p></text>\n  <text x=\"240\" y=\"140\" width=\"200\" height=\"60\" font=\"code\" color=\"state-normal\" anchor=\"middle\"><p>色碼: 藍 1</p></text>\n  <text x=\"460\" y=\"140\" width=\"200\" height=\"60\" font=\"code\" color=\"text-main\" anchor=\"middle\"><p>busy: false</p></text>\n  <text x=\"680\" y=\"140\" width=\"200\" height=\"60\" font=\"code\" color=\"text-main\" anchor=\"middle\"><p>effect: None</p></text>\n\n  <!-- Timeline -->\n  <shape type=\"line\" x=\"200\" y=\"280\" width=\"0\" height=\"340\" stroke=\"text-muted\" stroke-width=\"2\"/>\n  \n  <shape type=\"rect\" x=\"194\" y=\"274\" width=\"12\" height=\"12\" fill=\"state-alert\" corner-radius=\"6\"/>\n  <text x=\"240\" y=\"260\" width=\"300\" height=\"40\" font=\"body\" color=\"text-main\"><p>1. 警示被 submit 受理</p></text>\n  <text x=\"560\" y=\"260\" width=\"600\" height=\"40\" font=\"code\" color=\"state-alert\"><p>reserved = true (封鎖新改色)</p></text>\n  <text x=\"560\" y=\"300\" width=\"600\" height=\"40\" font=\"code\" color=\"state-normal\"><p>LED 輸出仍是藍色 1</p></text>\n\n  <shape type=\"rect\" x=\"194\" y=\"374\" width=\"12\" height=\"12\" fill=\"state-alert\" corner-radius=\"6\"/>\n  <text x=\"240\" y=\"360\" width=\"300\" height=\"40\" font=\"body\" color=\"text-main\"><p>2. Owner 取得警示</p></text>\n  <text x=\"560\" y=\"360\" width=\"600\" height=\"40\" font=\"code\" color=\"state-alert\"><p>保存正常狀態 (1, true)</p></text>\n\n  <shape type=\"rect\" x=\"194\" y=\"434\" width=\"12\" height=\"12\" fill=\"state-alert\" corner-radius=\"6\"/>\n  <text x=\"240\" y=\"420\" width=\"300\" height=\"40\" font=\"body\" color=\"text-main\"><p>3. 第一次紅亮</p></text>\n  <text x=\"560\" y=\"420\" width=\"600\" height=\"40\" font=\"code\" color=\"state-alert\"><p>write(4)</p></text>\n  <text x=\"560\" y=\"460\" width=\"600\" height=\"40\" font=\"code\" color=\"text-muted\"><p>正常色碼不變，依然是 1</p></text>\n\n  <shape type=\"rect\" x=\"194\" y=\"554\" width=\"12\" height=\"12\" fill=\"state-normal\" corner-radius=\"6\"/>\n  <text x=\"240\" y=\"540\" width=\"300\" height=\"40\" font=\"body\" color=\"text-main\"><p>4. 第五次熄滅結束</p></text>\n  <text x=\"560\" y=\"540\" width=\"600\" height=\"40\" font=\"code\" color=\"state-normal\"><p>恢復保存值 write(1)</p></text>\n  <text x=\"560\" y=\"580\" width=\"600\" height=\"40\" font=\"code\" color=\"text-main\"><p>reserved = false, effect = None</p></text>\n</slide>"
+    },
+    {
+      "path": "demo_race.xml",
+      "mimeType": "text/xml",
+      "title": "demo_race.xml",
+      "content": "<slide id=\"demo_race\">\n  <background color=\"bg-page\"/>\n  <shape type=\"rect\" x=\"1240\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-alert\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1220\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-warn\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1200\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-alert\" corner-radius=\"4\"/>\n  \n  <text x=\"60\" y=\"40\" width=\"1160\" height=\"60\" font=\"heading\" color=\"text-main\" anchor=\"middle\">\n    <p>動態演示 3：按鈕與警示接近同時到達</p>\n  </text>\n  \n  <shape type=\"rect\" x=\"60\" y=\"140\" width=\"560\" height=\"240\" fill=\"bg-card\" corner-radius=\"12\" stroke=\"state-normal\" stroke-width=\"2\"/>\n  <text x=\"80\" y=\"160\" width=\"520\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-normal\">\n    <p>A. 按鈕已執行</p>\n  </text>\n  <text x=\"80\" y=\"220\" width=\"520\" height=\"140\" font=\"body\" color=\"text-muted\" line-height=\"1.6\">\n    <p>1. 按鈕 <span color=\"state-normal\">cycle 已寫入 GPIO (綠 2)</span></p>\n    <p>2. 警示到達</p>\n    <p>3. 警示保存新綠色，結束後<span color=\"state-normal\">恢復綠色</span></p>\n    <p><span color=\"state-normal\">結果：不能撤銷已執行的操作。</span></p>\n  </text>\n\n  <shape type=\"rect\" x=\"660\" y=\"140\" width=\"560\" height=\"240\" fill=\"bg-card\" corner-radius=\"12\" stroke=\"state-warn\" stroke-width=\"2\"/>\n  <text x=\"680\" y=\"160\" width=\"520\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-warn\">\n    <p>B. 按鈕已受理，但在 queue 未執行</p>\n  </text>\n  <text x=\"680\" y=\"220\" width=\"520\" height=\"140\" font=\"body\" color=\"text-muted\" line-height=\"1.6\">\n    <p>1. 按鈕收到 accepted (但 GPIO 仍藍 1)</p>\n    <p>2. 警示到達，設定 reserved = true</p>\n    <p>3. <span color=\"state-alert\">清空 queue，將 cycle 改為 rejected</span></p>\n    <p><span color=\"state-warn\">結果：警示後恢復原藍色，不補做按鈕。</span></p>\n  </text>\n\n  <shape type=\"rect\" x=\"60\" y=\"420\" width=\"1160\" height=\"200\" fill=\"bg-card\" corner-radius=\"12\" stroke=\"state-alert\" stroke-width=\"2\"/>\n  <text x=\"80\" y=\"440\" width=\"1120\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-alert\">\n    <p>C. 警示先受理，按鈕後來</p>\n  </text>\n  <text x=\"80\" y=\"500\" width=\"1120\" height=\"100\" font=\"body\" color=\"text-main\" line-height=\"1.6\">\n    <p>警示一被受理，<span font=\"code\" color=\"state-alert\">reserved=true</span>。按鈕即使先於第一次紅亮按下，</p>\n    <p>也會立刻被拒絕。不排隊，不改正常狀態。</p>\n  </text>\n</slide>"
+    },
+    {
+      "path": "input_safety.xml",
+      "mimeType": "text/xml",
+      "title": "input_safety.xml",
+      "content": "<slide id=\"input_safety\">\n  <background color=\"bg-page\"/>\n  <shape type=\"rect\" x=\"1240\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-normal\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1220\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-warn\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1200\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  \n  <text x=\"60\" y=\"40\" width=\"1160\" height=\"60\" font=\"heading\" color=\"text-main\" anchor=\"middle\">\n    <p>輸入也有生命週期：press_rejected 與 armed</p>\n  </text>\n  \n  <shape type=\"rect\" x=\"60\" y=\"140\" width=\"560\" height=\"520\" fill=\"bg-card\" corner-radius=\"12\"/>\n  <text x=\"90\" y=\"170\" width=\"500\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-normal\">\n    <p>按鈕：拒絕記憶與消耗</p>\n  </text>\n  <text x=\"90\" y=\"240\" width=\"500\" height=\"400\" font=\"body\" color=\"text-muted\" line-height=\"1.8\">\n    <p><span color=\"text-main\">問題：</span>紅閃中按住不放，紅閃結束後會不會自動換色？</p>\n    <p><span color=\"text-main\">解法：</span>去彈跳過程中如果曾遇到 <span font=\"code\">busy=true</span>，就會記住 <span font=\"code\" color=\"state-warn\">press_rejected=true</span>。</p>\n    <ul>\n      <li>不會提交 cycle 命令。</li>\n      <li>程式繼續等待放開，消耗掉這次按下。</li>\n      <li>即使後來 busy=false，也不會補交。</li>\n      <li>必須完全放開、重新按下，才有下一次機會。</li>\n    </ul>\n  </text>\n\n  <shape type=\"rect\" x=\"640\" y=\"140\" width=\"580\" height=\"520\" fill=\"bg-card\" corner-radius=\"12\"/>\n  <text x=\"670\" y=\"170\" width=\"520\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-alert\">\n    <p>光照：雙門檻與 Armed</p>\n  </text>\n  <text x=\"670\" y=\"240\" width=\"520\" height=\"400\" font=\"body\" color=\"text-muted\" line-height=\"1.8\">\n    <p><span color=\"text-main\">問題：</span>閃完之後光照還很暗，會不會連續無限紅閃？</p>\n    <p><span color=\"text-main\">解法：</span><span font=\"code\" color=\"state-normal\">busy=false</span> (可按按鈕) 不等於 <span font=\"code\" color=\"state-warn\">armed=true</span> (光線允許觸發)。</p>\n    <ul>\n      <li>紅閃結束後，busy 解除，按鈕恢復。</li>\n      <li>但光照任務仍 <span font=\"code\">armed=false</span>，不發新警示。</li>\n      <li>必須先變亮到 ADC ≥ 1100，才重新 armed=true。</li>\n      <li>再變暗到 ADC &lt; 1000，才會發出下一次警示。</li>\n    </ul>\n  </text>\n</slide>"
+    },
+    {
+      "path": "web_status.xml",
+      "mimeType": "text/xml",
+      "title": "web_status.xml",
+      "content": "<slide id=\"web_status\">\n  <background color=\"bg-page\"/>\n  <shape type=\"rect\" x=\"1240\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-web\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1220\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1200\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  \n  <text x=\"60\" y=\"40\" width=\"1160\" height=\"60\" font=\"heading\" color=\"text-main\" anchor=\"middle\">\n    <p>網頁提示要快，但控制權仍在後端</p>\n  </text>\n  \n  <shape type=\"rect\" x=\"60\" y=\"140\" width=\"460\" height=\"520\" fill=\"bg-card\" corner-radius=\"12\"/>\n  <text x=\"90\" y=\"170\" width=\"400\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-web\">\n    <p>兩個通道分流</p>\n  </text>\n  <text x=\"90\" y=\"230\" width=\"400\" height=\"120\" font=\"body\" color=\"text-main\" line-height=\"1.6\">\n    <p><span font=\"code\" color=\"state-web\">/api/led/status</span></p>\n    <p color=\"text-muted\">快速讀取 Owner RAM 快照，專供按鈕提示，完成後等 200ms。</p>\n  </text>\n  <text x=\"90\" y=\"370\" width=\"400\" height=\"120\" font=\"body\" color=\"text-main\" line-height=\"1.6\">\n    <p><span font=\"code\" color=\"state-normal\">/api/data</span></p>\n    <p color=\"text-muted\">慢速讀取感測器，專供感測卡片展示，完成後等 1000ms。</p>\n  </text>\n  <text x=\"90\" y=\"510\" width=\"400\" height=\"120\" font=\"body\" color=\"state-warn\" line-height=\"1.6\">\n    <p>避免慢回應或舊的感測副本，覆蓋掉最新的紅閃提示。</p>\n  </text>\n\n  <shape type=\"rect\" x=\"560\" y=\"140\" width=\"660\" height=\"240\" fill=\"bg-card\" corner-radius=\"12\"/>\n  <text x=\"590\" y=\"170\" width=\"600\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-alert\">\n    <p>5 秒有效期限 (Tolerate short failures)</p>\n  </text>\n  <text x=\"590\" y=\"230\" width=\"600\" height=\"140\" font=\"body\" color=\"text-muted\" line-height=\"1.6\">\n    <ul>\n      <li>單次 HTTP 失敗不立刻停用按鈕，保留快照。</li>\n      <li>新的成功回應，即使值相同，也刷新確認時間。</li>\n      <li>如果超過 5 秒沒有成功確認 LED 狀態，才顯示「狀態未知」並停用按鈕。</li>\n    </ul>\n  </text>\n\n  <shape type=\"rect\" x=\"560\" y=\"420\" width=\"660\" height=\"240\" fill=\"bg-card\" corner-radius=\"12\" stroke=\"state-normal\" stroke-width=\"2\"/>\n  <text x=\"590\" y=\"450\" width=\"600\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-normal\">\n    <p>後端永遠是權威</p>\n  </text>\n  <text x=\"590\" y=\"510\" width=\"600\" height=\"140\" font=\"body\" color=\"text-main\" line-height=\"1.6\">\n    <p>前端的停用只是使用者提示，不是資源保護的保障。</p>\n    <p>如果前端尚未得知紅閃，送出了 cycle 請求：</p>\n    <p>後端的 <span font=\"code\">submit()</span> 依然會擋下，回傳 <span font=\"code\" color=\"state-alert\">HTTP 409</span>，前端收到後立刻顯示警示。</p>\n  </text>\n</slide>"
+    },
+    {
+      "path": "extension.xml",
+      "mimeType": "text/xml",
+      "title": "extension.xml",
+      "content": "<slide id=\"extension\">\n  <background color=\"bg-page\"/>\n  <shape type=\"rect\" x=\"1240\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-normal\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1220\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1200\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  \n  <text x=\"60\" y=\"40\" width=\"1160\" height=\"60\" font=\"heading\" color=\"text-main\" anchor=\"middle\">\n    <p>新增效果，不新增第二個控制者</p>\n  </text>\n  \n  <text x=\"60\" y=\"140\" width=\"1160\" height=\"60\" font=\"body\" size=\"24\" color=\"text-main\">\n    <p>需求：新增按鈕 3，按下時綠色閃爍 3 次，完成後恢復。</p>\n  </text>\n\n  <shape type=\"rect\" x=\"60\" y=\"220\" width=\"560\" height=\"440\" fill=\"bg-card\" corner-radius=\"12\"/>\n  <text x=\"90\" y=\"250\" width=\"500\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-normal\">\n    <p>共用同一個架構</p>\n  </text>\n  <text x=\"90\" y=\"320\" width=\"500\" height=\"320\" font=\"body\" color=\"text-muted\" line-height=\"1.8\">\n    <p>這不是新增第二個 LED 控制者，而是新增一個要求來源與效果規格。</p>\n    <ul>\n      <li>按鈕 3 沿用 <span font=\"code\">wait_press</span> 去彈跳。</li>\n      <li>提交 <span font=\"code\">green_flash_alert</span> 到同一個 <span font=\"code\">LedService</span>。</li>\n      <li><span font=\"code\">submit</span> 一樣用 <span font=\"code\">busy=true</span> 擋掉其他改色。</li>\n      <li>Owner 用同一個狀態機跑完 3 次並恢復。</li>\n    </ul>\n  </text>\n\n  <shape type=\"rect\" x=\"660\" y=\"220\" width=\"560\" height=\"440\" fill=\"bg-card\" corner-radius=\"12\" stroke=\"state-warn\" stroke-width=\"2\"/>\n  <text x=\"690\" y=\"250\" width=\"500\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-warn\">\n    <p>效果衝突規則</p>\n  </text>\n  <text x=\"690\" y=\"320\" width=\"500\" height=\"320\" font=\"body\" color=\"text-main\" line-height=\"1.8\">\n    <p>採用最簡單的政策：「先接受的先完成，後來的拒絕」。</p>\n    <ul>\n      <li><span color=\"state-alert\">紅閃中</span>按下按鈕 3：拒絕綠閃。</li>\n      <li><span color=\"state-normal\">綠閃中</span>光線變暗：拒絕紅閃。</li>\n      <li>不插入、不排隊、不打斷、不建立巢狀恢復狀態。</li>\n    </ul>\n  </text>\n</slide>"
+    },
+    {
+      "path": "classroom.xml",
+      "mimeType": "text/xml",
+      "title": "classroom.xml",
+      "content": "<slide id=\"classroom\">\n  <background color=\"bg-page\"/>\n  <shape type=\"rect\" x=\"1240\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-warn\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1220\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-normal\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1200\" y=\"40\" width=\"8\" height=\"8\" fill=\"bg-card\" corner-radius=\"4\"/>\n  \n  <text x=\"60\" y=\"40\" width=\"1160\" height=\"60\" font=\"heading\" color=\"text-main\" anchor=\"middle\">\n    <p>課堂互動：用卡片走完一輪仲裁</p>\n  </text>\n  \n  <shape type=\"rect\" x=\"60\" y=\"140\" width=\"1160\" height=\"120\" fill=\"bg-card\" corner-radius=\"12\"/>\n  <text x=\"90\" y=\"160\" width=\"1100\" height=\"80\" font=\"body\" color=\"text-main\" line-height=\"1.6\">\n    <p>請準備幾張紙卡，代表 <span font=\"code\" color=\"state-normal\">cycle10</span>、<span font=\"code\" color=\"state-alert\">alert11</span>。在白板上畫出 Queue 的格子。</p>\n    <p color=\"text-muted\">分開記錄「正常色碼」「busy」「armed」與「實際輸出」，不要混成一個變數。</p>\n  </text>\n\n  <shape type=\"rect\" x=\"60\" y=\"300\" width=\"560\" height=\"360\" fill=\"bg-card\" corner-radius=\"12\"/>\n  <text x=\"90\" y=\"330\" width=\"500\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-normal\">\n    <p>學生問題 1</p>\n  </text>\n  <text x=\"90\" y=\"400\" width=\"500\" height=\"240\" font=\"body\" color=\"text-muted\" line-height=\"1.8\">\n    <p>Q: <span font=\"code\">submit</span> 回傳 accepted，LED 會立刻換色嗎？</p>\n    <p>A: 不會。只有 owner 拿到排程、從 queue 拿出命令時，才會寫入 GPIO。</p>\n  </text>\n\n  <shape type=\"rect\" x=\"660\" y=\"300\" width=\"560\" height=\"360\" fill=\"bg-card\" corner-radius=\"12\"/>\n  <text x=\"690\" y=\"330\" width=\"500\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-alert\">\n    <p>學生問題 2</p>\n  </text>\n  <text x=\"690\" y=\"400\" width=\"500\" height=\"240\" font=\"body\" color=\"text-muted\" line-height=\"1.8\">\n    <p>Q: 光照一直成功取得資料，且 LED 超過 5 秒沒更新。按鈕該不該可操作？</p>\n    <p>A: 不該。「能連上 ESP32」不等於「能確認 LED 目前沒有在閃」。</p>\n  </text>\n</slide>"
+    },
+    {
+      "path": "verification.xml",
+      "mimeType": "text/xml",
+      "title": "verification.xml",
+      "content": "<slide id=\"verification\">\n  <background color=\"bg-page\"/>\n  <shape type=\"rect\" x=\"1240\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-normal\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1220\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-normal\" corner-radius=\"4\"/>\n  <shape type=\"rect\" x=\"1200\" y=\"40\" width=\"8\" height=\"8\" fill=\"state-normal\" corner-radius=\"4\"/>\n  \n  <text x=\"60\" y=\"40\" width=\"1160\" height=\"60\" font=\"heading\" color=\"text-main\" anchor=\"middle\">\n    <p>證據、限制與帶回家的檢查清單</p>\n  </text>\n  \n  <shape type=\"rect\" x=\"60\" y=\"140\" width=\"560\" height=\"520\" fill=\"bg-card\" corner-radius=\"12\"/>\n  <text x=\"90\" y=\"170\" width=\"500\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-normal\">\n    <p>目前能說什麼（證據）</p>\n  </text>\n  <text x=\"90\" y=\"240\" width=\"500\" height=\"400\" font=\"body\" color=\"text-muted\" line-height=\"1.8\">\n    <ul>\n      <li>使用者回報實機操作狀況良好、網頁不因短暫失敗失能。</li>\n      <li>桌面 Fake Hardware 通過 20 個 Python 測試（涵蓋 FIFO、競爭、狀態機與恢復）。</li>\n      <li>所有 Mermaid 圖皆通過 11.13.0 解析。</li>\n      <li>機制的每個結果，都能用受理與執行的先後順序解釋。</li>\n    </ul>\n  </text>\n\n  <shape type=\"rect\" x=\"640\" y=\"140\" width=\"580\" height=\"520\" fill=\"bg-card\" corner-radius=\"12\"/>\n  <text x=\"670\" y=\"170\" width=\"520\" height=\"40\" font=\"heading\" size=\"24\" color=\"state-alert\">\n    <p>目前不能說什麼（限制）</p>\n  </text>\n  <text x=\"670\" y=\"240\" width=\"520\" height=\"400\" font=\"body\" color=\"text-muted\" line-height=\"1.8\">\n    <ul>\n      <li>這就是唯一或最好的仲裁機制。</li>\n      <li>所有 ESP32 板型與網路壓力情境都已通過（目前無壓力數據）。</li>\n      <li>實機每次都在 200ms 內更新完成。</li>\n      <li>MQTT 已實機驗證（本次未接通 callback）。</li>\n      <li>桌面測試通過等於完整實機驗收。</li>\n    </ul>\n  </text>\n</slide>"
+    }
+  ],
+  "scaffolds": [],
+  "viewState": {
+    "mode": "preview",
+    "zoom": 1,
+    "slide_ids": [
+      "cover",
+      "problem",
+      "architecture",
+      "data_model",
+      "demo_cycle",
+      "demo_alert",
+      "demo_race",
+      "input_safety",
+      "web_status",
+      "extension",
+      "classroom",
+      "verification"
+    ],
+    "outline": [
+      {
+        "id": "cover",
+        "title": "三種需求，一個 LED",
+        "summary": "以一個 RGB LED 同時面對實體按鈕、網頁按鈕與低光警示的問題開場，提出單一 owner 的核心問題。",
+        "state": "edited"
+      },
+      {
+        "id": "problem",
+        "title": "問題不是 GPIO，而是多個人同時想操作",
+        "summary": "展示舊機制中紅閃、換色、網頁回應互相覆蓋的錯亂，整理必須回答的四個問題。",
+        "state": "edited"
+      },
+      {
+        "id": "architecture",
+        "title": "一個受理窗口，一位 LED 工作員",
+        "summary": "建立完整角色圖：來源只提交要求，submit 統一受理，有限 queue 排隊，唯一 owner 最後才寫 GPIO。",
+        "state": "edited"
+      },
+      {
+        "id": "data_model",
+        "title": "把五種資料分開，才不會把狀態混成一團",
+        "summary": "區分命令、正常狀態、暫時效果、receipt 與實際輸出，強調 accepted 不等於 executed。",
+        "state": "edited"
+      },
+      {
+        "id": "demo_cycle",
+        "title": "動態演示 1：按一次按鈕，LED 何時才變色？",
+        "summary": "用固定版面逐步呈現 cycle 命令從按下、受理、排隊到 owner 寫入 GPIO 的完整路徑。",
+        "state": "edited"
+      },
+      {
+        "id": "demo_alert",
+        "title": "動態演示 2：低光警示如何保護原本狀態？",
+        "summary": "逐步呈現 reserved、紅閃狀態機、五次亮滅、恢復原色與解除 busy 的時間線。",
+        "state": "edited"
+      },
+      {
+        "id": "demo_race",
+        "title": "動態演示 3：按鈕與警示接近同時到達",
+        "summary": "用三個時間點拆解「已執行」與「只受理未執行」兩種結果，說明 accepted 後仍可能被拒絕是設計政策。",
+        "state": "edited"
+      },
+      {
+        "id": "input_safety",
+        "title": "輸入也有生命週期：press_rejected 與 armed",
+        "summary": "說明按住按鈕不補做、去彈跳、光照雙門檻與 armed，並區分 busy 與 armed。",
+        "state": "edited"
+      },
+      {
+        "id": "web_status",
+        "title": "網頁提示要快，但控制權仍在後端",
+        "summary": "展示 LED 快速快照通道與慢感測通道分流、單筆在途、no-store、逾時與 5 秒有效期限。",
+        "state": "edited"
+      },
+      {
+        "id": "extension",
+        "title": "新增效果，不新增第二個控制者",
+        "summary": "以綠閃三次為例，展示如何重用同一個 LedService、busy 政策與恢復狀態機。",
+        "state": "edited"
+      },
+      {
+        "id": "classroom",
+        "title": "課堂互動：用卡片走完一輪仲裁",
+        "summary": "提供可現場操作的紙卡／白板演練：cycle10、alert11、queue、busy、armed、receipt 狀態。",
+        "state": "edited"
+      },
+      {
+        "id": "verification",
+        "title": "證據、限制與帶回家的檢查清單",
+        "summary": "整理目前桌面測試與 Mermaid 解析證據、尚未完成的實機驗證，以及學生可執行的驗收問題。",
+        "state": "edited"
+      }
+    ],
+    "generate_mode": "pptx",
+    "isPptxSlides": true,
+    "deck_topic": "education",
+    "style_request": "繁體中文教學簡報；深海軍藍背景搭配青綠、琥珀、紅色警示與藍色正常狀態；高對比、清楚的流程圖與時間軸；每頁少量大字、用卡片和箭頭說清楚責任邊界；以同一套角色與顏色貫穿全 deck。請把動態演示做成連續幾頁的 staged walkthrough：元素位置固定、每頁只增加一個新狀態，放映時可逐頁／逐點播放。"
+  },
+  "createdAt": "2026-10-11T15:46:20.922Z",
+  "updatedAt": "2026-10-11T15:50:53.218Z"
+}

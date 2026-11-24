@@ -246,6 +246,136 @@ WiFi、NTP 與 DHT11 的底層操作可能是同步呼叫，會短暫占用協�
 
 MQTT 函式庫內部可能另有連線維持、重連與收訊工作，不列入上述應用任務數量。
 
+### 7.1 實體按鈕事件與 handler 架構決策
+
+本節記錄按鈕事件模型與 handler 執行契約。這是後續按鈕能力擴充的目標架構，**目前尚未實作**；目前程式仍由 `button1_task()`／`button2_task()` 依序呼叫 `wait_press()`、執行一次動作，再呼叫 `wait_release()`。`hardware/button.py` 目前已有去彈跳、按下／放開等待與 `ButtonEvent` 雛形，但尚未形成完整的手勢辨識與 handler 派送器。
+
+#### 7.1.1 責任邊界
+
+按鈕的硬體能力與系統用途分開：
+
+| 層級 | 責任 | 不負責 |
+|---|---|---|
+| `hardware/button.py` | 讀取 GPIO、去彈跳、穩定邊緣判斷、手勢狀態機、產生標準事件 | LED 仲裁、MQTT、Web、特定業務命令 |
+| 按鈕監測 task | 持續取樣、維持狀態機、把事件放入有界 queue | 直接等待慢速業務 handler |
+| Button dispatcher | 依序取事件、呼叫對應 handler、隔離 handler 例外 | 直接讀寫 GPIO |
+| 應用 handler | 將 `single_click`、`double_click` 或 `long_press` 轉成 `CommandService`、MQTT 或其他服務呼叫 | 重新判斷電氣去彈跳 |
+
+按鈕 driver 可以提供通用的「按鈕能辨識哪些手勢」能力，但 handler 綁定必須在應用層完成。按鈕模組不能因為目前按鈕 1 用於 LED、按鈕 2 用於 MQTT，就把這些用途寫死在 driver 中。
+
+#### 7.1.2 事件與手勢的區分
+
+按下與放開是穩定的實體邊緣事件；單擊、雙擊與長按是由邊緣事件及單調時間推導出的手勢事件。
+
+| 事件 | 產生條件 | 預設語意 |
+|---|---|---|
+| `pressed` | 去彈跳後由穩定放開轉為穩定按下 | 立即送出 |
+| `released` | 去彈跳後由穩定按下轉為穩定放開 | 立即送出 |
+| `single_click` | 一次按下／放開，雙擊視窗內沒有第二次按下 | 等待雙擊視窗結束後送出 |
+| `double_click` | 兩次完整按下／放開，第二次按下符合時間限制 | 第二次放開後送出 |
+| `long_press` | 按下持續超過長按門檻 | 到達門檻時送出一次 |
+| `repeat` | 按住期間週期性產生 | 暫不納入第一版 |
+
+`pressed`、`released` 與 `single_click`／`double_click` 不應被混稱為同一種狀態。內部狀態機保存按鈕目前的穩定電位、按下起始時間、點擊次數、長按是否已觸發及雙擊期限；對外則送出事件。
+
+#### 7.1.3 手勢判斷規則
+
+單擊與雙擊存在不可避免的時間取捨：第一次放開時，系統尚不知道這是單擊結束，還是雙擊的第一次放開。因此採用以下規則：
+
+```text
+第一次 released
+  ├─ double-click window 內沒有第二次 pressed → single_click
+  └─ double-click window 內出現第二次 pressed
+       └─ 第二次 released → double_click
+```
+
+事件順序固定為：
+
+```text
+一般單擊：pressed → released → single_click
+雙擊：    pressed → released → pressed → released → double_click
+長按：    pressed → long_press → released
+```
+
+長按成立後，該次按壓不得再產生 `single_click`，避免同一次操作同時觸發兩種互相衝突的命令。所有 debounce、double-click window、long-press threshold 與 timeout 都使用 `time.ticks_ms()`／`time.ticks_diff()` 計算；不得使用可能被 NTP 校正的牆上時間計算操作間隔。
+
+#### 7.1.4 監測與 handler 派送分離
+
+按鈕監測器不得在讀到事件後直接等待應用 handler。目標流程是：
+
+```text
+GPIO polling 或 IRQ 喚醒
+  → 去彈跳
+  → 手勢狀態機
+  → 有界 ButtonEvent queue
+  → uasyncio dispatcher
+  → async handler
+  → CommandService 或其他應用服務
+```
+
+監測 task 即使遇到慢速 handler，也必須繼續取樣，否則可能漏掉放開、雙擊或下一次按下。事件 queue 必須有界；容量不足時要記錄 `event_overflow`／`queue_full` 等明確結果，不得以無限佇列消耗 ESP32 RAM，也不得靜默宣稱事件已處理。
+
+同一顆按鈕的 handler 預設依序執行，不在每次事件抵達時無限制呼叫 `uasyncio.create_task()`。這可保持事件順序，避免兩個 handler 同時修改同一份應用狀態。若未來某種事件確實允許背景並行，應由派送政策明確標示 `background`、`replace` 或其他執行模式，不由 driver 偷含這項決策。
+
+#### 7.1.5 handler 的非同步契約
+
+本專案的按鈕 handler 統一採用 `async def handler(event)` 契約：
+
+- 不需要等待的 handler 也宣告為 `async def`，可以只在函式內快速呼叫同步的 `CommandService.submit()`。
+- 需要等待網路、音效、動畫或其他協作式 I/O 的 handler，可以在內部 `await`。
+- handler 不得執行未包裝的長時間同步工作；`async def` 本身不會把同步函式自動變成非阻塞。
+- dispatcher 必須捕捉 handler 例外、記錄按鈕與事件序號，不能因單一 handler 失敗而停止 GPIO 監測 task。
+- handler 不得直接寫 LED GPIO；LED 操作仍須進入 `CommandService`，由 `LedController` 唯一 owner 執行。
+
+選擇統一 async 契約，而不是在執行時猜測 handler 回傳的是普通值或 coroutine，原因是契約較明確，也避免忘記 `await` 時只建立 coroutine 卻沒有執行。這與 MQTT 的底層同步 callback 不同：`mqtt_as` 不會等待應用 callback，因此 MQTT 仍須保留同步 bridge；按鈕 dispatcher 本身由 `uasyncio` 控制，沒有相同的底層限制。
+
+#### 7.1.6 事件資料與生命週期
+
+每個 `ButtonEvent` 至少應包含：
+
+| 欄位 | 用途 |
+|---|---|
+| `button_id` | 區分不同按鈕 |
+| `kind` | `pressed`、`released`、`single_click`、`double_click` 或 `long_press` |
+| `sequence` | 追蹤順序、遺失與重複事件 |
+| `timestamp_ms` | 單調時間事件標記 |
+| `duration_ms` | 按住時間；放開與長按事件使用 |
+| `click_count` | 支援未來三擊或通用點擊計數 |
+
+監測器與 dispatcher 都需要明確的 `start()`／`run()`／`stop()` 生命週期。停止時應停止接受新事件、取消等待中的雙擊／長按計時、處理或取消未完成 handler，並讓按鈕輸入回到安全且可診斷的狀態。
+
+#### 7.1.7 輪詢與 IRQ 的決策
+
+目前選擇 **`uasyncio` 輪詢加去彈跳**，理由是按鈕事件頻率低、實作容易測試，且符合目前單一協同事件迴圈。GPIO IRQ 保留為日後低延遲或極短脈衝需求的選項，但 IRQ 只能記錄電位變化或喚醒監測 task，不得在 ISR 中 `await`、配置大量物件、列印、呼叫 Web／MQTT／LED handler 或直接執行長工作。
+
+#### 7.1.8 方案取捨與不採用方案
+
+| 方案 | 優點 | 風險／限制 | 決策 |
+|---|---|---|---|
+| 目前 `wait_press()` 後直接執行動作 | 程式最短，適合單一按下功能 | 無法統一雙擊／長按，慢 handler 會阻塞監測 | 保留作目前基線，不作目標架構 |
+| 監測 task 直接 `await handler` | 流程直觀 | 漏事件、事件順序與錯誤隔離較差 | 不採用 |
+| 同步／非同步 handler 自動猜測 | 呼叫端彈性較高 | 契約不明確，容易遺漏 `await`，MicroPython 相容性與測試複雜 | 不作本專案預設 |
+| IRQ 內直接呼叫 handler | 延遲可能低 | ISR 不能安全執行協作式 I/O 或應用政策 | 不採用 |
+| 狀態機＋有界 queue＋async dispatcher | 可擴充手勢、保留順序、隔離慢 handler 與例外 | 多一個 task、queue 與時間參數，需測試容量與延遲 | **採用** |
+
+#### 7.1.9 實作前的驗收條件
+
+未來實作此架構時，至少應以 fake GPIO／fake clock 驗證：
+
+1. 按鈕抖動不產生多餘 `pressed`／`released`。
+2. 單擊在雙擊視窗結束後只產生一次 `single_click`。
+3. 有效雙擊不再另外產生 `single_click`。
+4. 長按會在門檻到達時產生一次 `long_press`，放開後不補發單擊。
+5. `pressed`、`released`、手勢事件的順序固定。
+6. async handler 等待時，監測器仍能取樣並保留後續事件。
+7. handler 例外不會停止監測器。
+8. queue 滿時有明確的 overflow 語意。
+9. `stop()` 能取消 pending timer、handler 與資源等待。
+10. 桌面 fake 驗證通過後，仍須分開進行 ESP32 實際按鍵、接線與電氣去彈跳驗證。
+
+本節描述的是按鈕輸入的架構決策，不表示上述完整手勢、queue 與 dispatcher 已經部署到目前 ESP32。
+
+
 ## 8. 控制與資料流
 
 ### DHT11、OLED、Web 與 MQTT

@@ -30,3 +30,11 @@ Thumbs.db
 /.vscode/settings.json
 /typings/
 /.local-backups/
+.codegraphy/*
+
+# Local meow-memory database (no recycle bin; never commit)
+.dsh-meow/
+
+# Local PDF text-extraction tooling (pypdf) and pip temp dir; machine-local only
+.pdf-tools/
+.tmp-pip/

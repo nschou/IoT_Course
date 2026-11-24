@@ -5,7 +5,7 @@
 ## 先看結論
 
 1. **供電：**VCC 接穩定 **5 V**，電源供應能力 **>200 mA**；GND 必須與 ESP32 共地。
-2. **UART：**預設 `256000 baud, 8 data bits, no parity, 1 stop bit`（8N1）。ESP32 的 TX/RX 要交叉接線。
+2. **UART：**出廠預設 `256000`，**本機已改為 `115200`**（8 data bits, no parity, 1 stop bit，8N1）。ESP32 的 TX/RX 要交叉接線。
 3. **電位：**模組 GPIO 輸出為 **3.3 V**；ESP32 TX 也是 3.3 V。不要把 5 V 直接送進 ESP32 GPIO/UART。
 4. **最短驗證路徑：**先用 OUT 腳確認有人／無人，再用 UART 讀取距離與能量資料；首次調參優先使用原廠 PC 工具或 HLKRadarTool APP。
 5. **MicroPython：**同目錄的 `ld2410b_micropython.py` 是無第三方依賴的最小驅動，支援正常／工程模式資料解析，以及讀取與設定命令。
@@ -34,7 +34,7 @@
 | 工作頻段 | 24–24.25 GHz | 外殼、金屬件與多模組間距會影響偵測 |
 | 供電 | DC 5 V，供電能力 >200 mA | 不要由 ESP32 的 3.3 V 腳供電；電源需穩定、低紋波 |
 | 平均工作電流 | 約 82 mA | 電源額定值仍以 >200 mA 能力設計 |
-| UART | 預設 256000 baud，8N1 | MicroPython `UART` 必須明確設定 baudrate |
+| UART | 出廠 256000、本機 115200，8N1 | MicroPython `UART` 必須明確設定 baudrate（本機用 115200） |
 | GPIO OUT | 3.3 V；有人高、無人低 | 只需要存在狀態時可不用解析 UART |
 | 探測距離 | 約 0.75–6 m，可調 | 實際距離受目標、環境與安裝影響 |
 | 探測角度 | 約 ±60° | 天線面要朝向目標區域 |
@@ -99,7 +99,7 @@
 **PC 工具：**
 
 1. 使用 USB-to-TTL 正確接模組 UART，注意 TX/RX 交叉與共地。
-2. 工具選擇正確 COM port，設定 `256000` baud、工程模式後連線。
+2. 工具選擇正確 COM port，設定 `115200` baud、工程模式後連線。
 3. 按開始查看即時資料；停止後才能讀取或設定參數。
 4. 工具連線時不要同時讓 ESP32 佔用同一組 UART。
 
@@ -348,7 +348,7 @@ asyncio.run(radar_task())
 
 | 現象 | 優先檢查 |
 |---|---|
-| 完全沒有輸出 | 5 V 供電、GND、模組是否完成初始化、UART baudrate 是否為 256000 |
+| 完全沒有輸出 | 5 V 供電、GND、模組是否完成初始化、UART baudrate 是否為 115200 |
 | UART 一直 timeout | TX/RX 是否交叉、UART 編號／GPIO 是否正確、是否被 PC 工具或 APP 佔用 |
 | 收到亂碼 | baudrate、8N1、共地、電源雜訊、線長與接觸 |
 | 一直判定有人 | 持續移動物、強反射物、背面目標、中頻干擾、電源紋波、模組間距 |
@@ -363,7 +363,7 @@ asyncio.run(radar_task())
 ```text
 module: HLK-LD2410B
 firmware: <由 0x00A0 或 APP 取得>
-baudrate: 256000
+baudrate: 115200
 resolution: 0.75m or 0.2m
 max moving/stationary gate: <value>
 no-target duration: <seconds>

@@ -1,0 +1,37 @@
+<slide id="verification">
+  <background color="bg-page"/>
+  <shape type="rect" x="1240" y="40" width="8" height="8" fill="state-normal" corner-radius="4"/>
+  <shape type="rect" x="1220" y="40" width="8" height="8" fill="state-normal" corner-radius="4"/>
+  <shape type="rect" x="1200" y="40" width="8" height="8" fill="state-normal" corner-radius="4"/>
+  
+  <text x="60" y="40" width="1160" height="60" font="heading" color="text-main" anchor="middle">
+    <p>證據、限制與帶回家的檢查清單</p>
+  </text>
+  
+  <shape type="rect" x="60" y="140" width="560" height="520" fill="bg-card" corner-radius="12"/>
+  <text x="90" y="170" width="500" height="40" font="heading" size="24" color="state-normal">
+    <p>目前能說什麼（證據）</p>
+  </text>
+  <text x="90" y="240" width="500" height="400" font="body" color="text-muted" line-height="1.8">
+    <ul>
+      <li>使用者回報實機操作狀況良好、網頁不因短暫失敗失能。</li>
+      <li>桌面 Fake Hardware 通過 20 個 Python 測試（涵蓋 FIFO、競爭、狀態機與恢復）。</li>
+      <li>所有 Mermaid 圖皆通過 11.13.0 解析。</li>
+      <li>機制的每個結果，都能用受理與執行的先後順序解釋。</li>
+    </ul>
+  </text>
+
+  <shape type="rect" x="640" y="140" width="580" height="520" fill="bg-card" corner-radius="12"/>
+  <text x="670" y="170" width="520" height="40" font="heading" size="24" color="state-alert">
+    <p>目前不能說什麼（限制）</p>
+  </text>
+  <text x="670" y="240" width="520" height="400" font="body" color="text-muted" line-height="1.8">
+    <ul>
+      <li>這就是唯一或最好的仲裁機制。</li>
+      <li>所有 ESP32 板型與網路壓力情境都已通過（目前無壓力數據）。</li>
+      <li>實機每次都在 200ms 內更新完成。</li>
+      <li>MQTT 已實機驗證（本次未接通 callback）。</li>
+      <li>桌面測試通過等於完整實機驗收。</li>
+    </ul>
+  </text>
+</slide>

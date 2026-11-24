@@ -1,0 +1,16 @@
+<design>
+  <size width="1280" height="720"></size>
+  <color name="bg-page" value="#0A1128"/>
+  <color name="bg-card" value="#1A233A"/>
+  <color name="text-main" value="#F8FAFC"/>
+  <color name="text-muted" value="#94A3B8"/>
+  <color name="state-normal" value="#3B82F6"/>
+  <color name="state-alert" value="#EF4444"/>
+  <color name="state-warn" value="#F59E0B"/>
+  <color name="state-web" value="#06B6D4"/>
+  <font name="display" family="Noto Sans TC" size="48"/>
+  <font name="heading" family="Noto Sans TC" size="32"/>
+  <font name="body" family="Noto Sans TC" size="20"/>
+  <font name="code" family="Roboto Mono" size="18"/>
+  <font name="caption" family="Noto Sans TC" size="14"/>
+</design>

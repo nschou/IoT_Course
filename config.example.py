@@ -34,6 +34,49 @@ RFID_MISO_PIN = 10
 RFID_RST_PIN = 9
 RFID_CS_PIN = 13
 
+# LD2410B 毫米波雷達（UART 115200 8N1；TX/RX 需與模組交叉；出廠預設 256000）
+# 板子：ESP32-S2 Mini（GPIO 33-40 引出；26-32 為 flash/PSRAM，不可用）
+#   GPIO36 = ESP32 TX  -> 模組 RX
+#   GPIO38 = ESP32 RX  <- 模組 TX
+#   GPIO40 = OUT（模組推挽輸出）
+# 注意：S2 的 GPIO39-42 預設為 JTAG 腳；GPIO40(MTDO) 當輸入可用，但不要同時接 JTAG 除錯器。
+#      若 OUT 讀值不穩，可改接 GPIO34（目前未被其他裝置使用）。
+LD2410B_UART_ID = 1
+LD2410B_TX_PIN = 36
+LD2410B_RX_PIN = 38
+LD2410B_OUT_PIN = 40
+LD2410B_OUT_ACTIVE_HIGH = True    # OUT 電位極性；模組為推挽輸出，有人時為高電位
+LD2410B_BAUDRATE = 115200
+
+# 獨居長者照護規則（apps/elder_care/radar_care.py）
+RADAR_CARE_MOVE_ENERGY_MIN = 25        # 判定「有活動」的移動能量門檻 0-100
+RADAR_CARE_MOVE_SESSION_GAP_MS = 60000  # 相隔多久才算新的一次活動（去抖）
+RADAR_CARE_INACTIVITY_SECONDS = 1800   # 連續無活動多久告警（30 分鐘）
+RADAR_CARE_AWAY_SECONDS = 10800        # 連續無人在房多久告警（3 小時）
+RADAR_CARE_BED_MIN_CM = 25             # 床鋪距離範圍（cm）
+RADAR_CARE_BED_MAX_CM = 120
+RADAR_CARE_BED_EXIT_SECONDS = 600      # 離床後多久未回床告警（10 分鐘）
+RADAR_CARE_NIGHT_START_HOUR = 22       # 夜間時段
+RADAR_CARE_NIGHT_END_HOUR = 6
+RADAR_CARE_NIGHT_LIGHT_MAX_ADC = 1100  # 低於此光感值視為昏暗
+RADAR_CARE_NIGHT_LIGHT_SECONDS = 60    # 夜燈持續時間
+
+# 床鋪監測（apps/elder_care/bed_monitor.py）
+RADAR_BED_MIN_CM = 60             # 躺著時的距離帶下限（校準後填入）
+RADAR_BED_MAX_CM = 180            # 距離帶上限
+RADAR_BED_TURN_ENERGY_MIN = 60    # 翻身判定的移動能量門檻
+RADAR_BED_TURN_DEBOUNCE_MS = 3000 # 翻身去抖，避免一次翻身算多次
+RADAR_BED_SIT_UP_DELTA_CM = 25    # 距離相對基線改變多少視為坐起
+RADAR_BED_EXIT_CONFIRM_MS = 5000  # 距離帶要空多久才算離床
+RADAR_BED_RETURN_CONFIRM_MS = 3000 # 回到距離帶要待多久才算回床
+RADAR_BED_FLOOR_MIN_CM = 225     # 地板距離帶下限（天花板安裝時，躺地板約 230-250 cm）
+RADAR_BED_FLOOR_MAX_CM = 255
+RADAR_BED_FLOOR_NOTICE_MS = 30000    # 停在地板 30 秒：輕提示
+RADAR_BED_FLOOR_ALERT_MS = 120000    # 2 分鐘：告警
+RADAR_BED_FLOOR_CRITICAL_MS = 600000 # 10 分鐘：升級告警
+
+
+
 # ==================== 感測器參數 ====================
 
 # 光感測器閾值

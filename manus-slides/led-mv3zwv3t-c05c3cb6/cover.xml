@@ -1,0 +1,32 @@
+<slide id="cover">
+  <background color="bg-page"/>
+  <shape type="rect" x="1240" y="40" width="8" height="8" fill="state-normal" corner-radius="4"/>
+  <shape type="rect" x="1220" y="40" width="8" height="8" fill="state-warn" corner-radius="4"/>
+  <shape type="rect" x="1200" y="40" width="8" height="8" fill="state-alert" corner-radius="4"/>
+  
+  <text x="140" y="240" width="1000" height="80" font="display" size="64" color="text-main" align="center" anchor="middle">
+    <p>三種需求，一個 LED</p>
+  </text>
+  <text x="140" y="340" width="1000" height="60" font="heading" color="state-normal" align="center" anchor="middle">
+    <p>單一擁有者的控制架構</p>
+  </text>
+  <text x="140" y="420" width="1000" height="40" font="body" color="text-muted" align="center" anchor="middle">
+    <p>實體按鈕、網頁控制與低光警示的資源仲裁</p>
+  </text>
+  
+  <shape type="rect" x="340" y="520" width="160" height="60" fill="bg-card" corner-radius="8"/>
+  <text x="340" y="520" width="160" height="60" font="body" color="text-main" align="center" anchor="middle"><p>實體按鈕</p></text>
+  
+  <shape type="rect" x="560" y="520" width="160" height="60" fill="bg-card" corner-radius="8"/>
+  <text x="560" y="520" width="160" height="60" font="body" color="state-web" align="center" anchor="middle"><p>網頁按鈕</p></text>
+  
+  <shape type="rect" x="780" y="520" width="160" height="60" fill="bg-card" corner-radius="8"/>
+  <text x="780" y="520" width="160" height="60" font="body" color="state-alert" align="center" anchor="middle"><p>低光警示</p></text>
+  
+  <shape type="line" x="420" y="580" width="220" height="80" stroke="text-muted" stroke-width="2"/>
+  <shape type="line" x="640" y="580" width="0" height="80" stroke="text-muted" stroke-width="2"/>
+  <shape type="line" x="860" y="580" width="-220" height="80" stroke="text-muted" stroke-width="2"/>
+  
+  <shape type="rect" x="610" y="660" width="60" height="60" fill="state-normal" corner-radius="30"/>
+  <text x="610" y="660" width="60" height="60" font="body" color="bg-page" align="center" anchor="middle"><p>LED</p></text>
+</slide>

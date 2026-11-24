@@ -1,0 +1,54 @@
+/* 商品頁樣式 */
+.single-product .variations th.label {
+	text-align: left;
+	padding-left: 0;
+}
+
+#order_review {
+	display: block !important;
+}
+
+label[for$="new-payment-method"] {
+	position: relative;
+}
+
+#payment .woocommerce-SavedPaymentMethods,
+#payment .woocommerce-SavedPaymentMethods li {
+	list-style: none !important;
+}
+
+#payment .woocommerce-SavedPaymentMethods {
+	margin: 0.25rem 0 0.5rem 2rem !important;
+	padding: 0 !important;
+}
+
+#payment .woocommerce-SavedPaymentMethods li {
+	margin: 0 !important;
+	padding: 0.2rem 0 !important;
+}
+
+#payment .woocommerce-SavedPaymentMethods li label {
+	margin-left: 0.35rem;
+}
+.change-save-card-label {
+	cursor: pointer;
+}
+.change-save-card-tooltips {
+	opacity: 0;
+	z-index: -50;
+	background-color: #18181b;
+	padding: 0.5rem 0.75rem;
+	border-radius: 0.75rem;
+	border-color: #e5e7eb;
+	font-size: 0.875rem;
+	color: #ecedee;
+	position: absolute;
+	top: calc(100% + 1rem);
+	left: 0rem;
+	transition: opacity 0.3s ease-in-out;
+}
+
+.change-save-card-label:hover + .change-save-card-tooltips {
+	opacity: 1;
+	z-index: 50;
+}

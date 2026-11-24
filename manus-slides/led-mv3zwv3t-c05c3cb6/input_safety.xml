@@ -1,0 +1,40 @@
+<slide id="input_safety">
+  <background color="bg-page"/>
+  <shape type="rect" x="1240" y="40" width="8" height="8" fill="state-normal" corner-radius="4"/>
+  <shape type="rect" x="1220" y="40" width="8" height="8" fill="state-warn" corner-radius="4"/>
+  <shape type="rect" x="1200" y="40" width="8" height="8" fill="bg-card" corner-radius="4"/>
+  
+  <text x="60" y="40" width="1160" height="60" font="heading" color="text-main" anchor="middle">
+    <p>輸入也有生命週期：press_rejected 與 armed</p>
+  </text>
+  
+  <shape type="rect" x="60" y="140" width="560" height="520" fill="bg-card" corner-radius="12"/>
+  <text x="90" y="170" width="500" height="40" font="heading" size="24" color="state-normal">
+    <p>按鈕：拒絕記憶與消耗</p>
+  </text>
+  <text x="90" y="240" width="500" height="400" font="body" color="text-muted" line-height="1.8">
+    <p><span color="text-main">問題：</span>紅閃中按住不放，紅閃結束後會不會自動換色？</p>
+    <p><span color="text-main">解法：</span>去彈跳過程中如果曾遇到 <span font="code">busy=true</span>，就會記住 <span font="code" color="state-warn">press_rejected=true</span>。</p>
+    <ul>
+      <li>不會提交 cycle 命令。</li>
+      <li>程式繼續等待放開，消耗掉這次按下。</li>
+      <li>即使後來 busy=false，也不會補交。</li>
+      <li>必須完全放開、重新按下，才有下一次機會。</li>
+    </ul>
+  </text>
+
+  <shape type="rect" x="640" y="140" width="580" height="520" fill="bg-card" corner-radius="12"/>
+  <text x="670" y="170" width="520" height="40" font="heading" size="24" color="state-alert">
+    <p>光照：雙門檻與 Armed</p>
+  </text>
+  <text x="670" y="240" width="520" height="400" font="body" color="text-muted" line-height="1.8">
+    <p><span color="text-main">問題：</span>閃完之後光照還很暗，會不會連續無限紅閃？</p>
+    <p><span color="text-main">解法：</span><span font="code" color="state-normal">busy=false</span> (可按按鈕) 不等於 <span font="code" color="state-warn">armed=true</span> (光線允許觸發)。</p>
+    <ul>
+      <li>紅閃結束後，busy 解除，按鈕恢復。</li>
+      <li>但光照任務仍 <span font="code">armed=false</span>，不發新警示。</li>
+      <li>必須先變亮到 ADC ≥ 1100，才重新 armed=true。</li>
+      <li>再變暗到 ADC &lt; 1000，才會發出下一次警示。</li>
+    </ul>
+  </text>
+</slide>

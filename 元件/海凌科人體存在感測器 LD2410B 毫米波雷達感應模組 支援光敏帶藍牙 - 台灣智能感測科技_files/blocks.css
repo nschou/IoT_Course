@@ -1,0 +1,21 @@
+.wc-block-cart-items__row.woosb-bundles:not(.woosb-fixed-price) .wc-block-cart-item__prices, .wc-block-cart-items__row.woosb-bundles:not(.woosb-fixed-price) .wc-block-components-product-badge, .wc-block-cart-items__row.woosb-bundles:not(.woosb-fixed-price) .wc-block-components-product-price__value, .wc-block-components-order-summary-item.woosb-bundles:not(.woosb-fixed-price) .wc-block-cart-item__prices, .wc-block-components-order-summary-item.woosb-bundles:not(.woosb-fixed-price) .wc-block-components-product-badge, .wc-block-components-order-summary-item.woosb-bundles:not(.woosb-fixed-price) .wc-block-components-product-price__value {
+  display: none !important;
+}
+.wc-block-cart-items__row.woosb-bundled .wc-block-cart-item__remove-link, .wc-block-components-order-summary-item.woosb-bundled .wc-block-cart-item__remove-link {
+  display: none !important;
+}
+.wc-block-cart-items__row.woosb-bundled .wc-block-cart-item__quantity, .wc-block-components-order-summary-item.woosb-bundled .wc-block-cart-item__quantity {
+  pointer-events: none !important;
+}
+.wc-block-cart-items__row.woosb-bundled.woosb-hide-bundled, .wc-block-components-order-summary-item.woosb-bundled.woosb-hide-bundled {
+  display: none !important;
+}
+.wc-block-cart-items__row.woosb-bundled.woosb-fixed-price .wc-block-cart-item__prices, .wc-block-cart-items__row.woosb-bundled.woosb-fixed-price .wc-block-components-product-badge, .wc-block-cart-items__row.woosb-bundled.woosb-fixed-price .wc-block-cart-item__total-price-and-sale-badge-wrapper, .wc-block-cart-items__row.woosb-bundled.woosb-fixed-price .wc-block-components-product-price__value, .wc-block-components-order-summary-item.woosb-bundled.woosb-fixed-price .wc-block-cart-item__prices, .wc-block-components-order-summary-item.woosb-bundled.woosb-fixed-price .wc-block-components-product-badge, .wc-block-components-order-summary-item.woosb-bundled.woosb-fixed-price .wc-block-cart-item__total-price-and-sale-badge-wrapper, .wc-block-components-order-summary-item.woosb-bundled.woosb-fixed-price .wc-block-components-product-price__value {
+  display: none !important;
+}
+
+.wc-block-components-order-summary-item.woosb-bundled.woosb-hide-bundled {
+  display: none !important;
+}
+
+/*# sourceMappingURL=blocks.css.map */

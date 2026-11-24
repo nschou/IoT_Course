@@ -1,0 +1,41 @@
+<slide id="extension">
+  <background color="bg-page"/>
+  <shape type="rect" x="1240" y="40" width="8" height="8" fill="state-normal" corner-radius="4"/>
+  <shape type="rect" x="1220" y="40" width="8" height="8" fill="bg-card" corner-radius="4"/>
+  <shape type="rect" x="1200" y="40" width="8" height="8" fill="bg-card" corner-radius="4"/>
+  
+  <text x="60" y="40" width="1160" height="60" font="heading" color="text-main" anchor="middle">
+    <p>新增效果，不新增第二個控制者</p>
+  </text>
+  
+  <text x="60" y="140" width="1160" height="60" font="body" size="24" color="text-main">
+    <p>需求：新增按鈕 3，按下時綠色閃爍 3 次，完成後恢復。</p>
+  </text>
+
+  <shape type="rect" x="60" y="220" width="560" height="440" fill="bg-card" corner-radius="12"/>
+  <text x="90" y="250" width="500" height="40" font="heading" size="24" color="state-normal">
+    <p>共用同一個架構</p>
+  </text>
+  <text x="90" y="320" width="500" height="320" font="body" color="text-muted" line-height="1.8">
+    <p>這不是新增第二個 LED 控制者，而是新增一個要求來源與效果規格。</p>
+    <ul>
+      <li>按鈕 3 沿用 <span font="code">wait_press</span> 去彈跳。</li>
+      <li>提交 <span font="code">green_flash_alert</span> 到同一個 <span font="code">LedService</span>。</li>
+      <li><span font="code">submit</span> 一樣用 <span font="code">busy=true</span> 擋掉其他改色。</li>
+      <li>Owner 用同一個狀態機跑完 3 次並恢復。</li>
+    </ul>
+  </text>
+
+  <shape type="rect" x="660" y="220" width="560" height="440" fill="bg-card" corner-radius="12" stroke="state-warn" stroke-width="2"/>
+  <text x="690" y="250" width="500" height="40" font="heading" size="24" color="state-warn">
+    <p>效果衝突規則</p>
+  </text>
+  <text x="690" y="320" width="500" height="320" font="body" color="text-main" line-height="1.8">
+    <p>採用最簡單的政策：「先接受的先完成，後來的拒絕」。</p>
+    <ul>
+      <li><span color="state-alert">紅閃中</span>按下按鈕 3：拒絕綠閃。</li>
+      <li><span color="state-normal">綠閃中</span>光線變暗：拒絕紅閃。</li>
+      <li>不插入、不排隊、不打斷、不建立巢狀恢復狀態。</li>
+    </ul>
+  </text>
+</slide>
