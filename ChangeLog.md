@@ -15,6 +15,16 @@
 `BUG` 表示行為不符合既有預期；`需求變更` 包含新功能、政策調整、文件與流程要求。一件工作若同時包含兩類，拆分紀錄或明確標示各項原因。
 
 Git commit hash 由歷史查詢取得；不要求把包含本紀錄的 commit hash 寫回本紀錄，避免自我引用。既有程式中的 v1.1.x／v1.2 註解不是統一的專案版本，本次開始以 Git commit 與後續 tag 作為版本依據。
+## CHG-20261124-079｜將元件/LD2410_repo 納入課程 repository 並同步 GitHub
+
+- **類別：**需求變更（版本同步）。
+- **日期／紀錄時間：**2026-11-24 14:50:16 +08:00，工具取得台北時間。
+- **原因：**`元件/LD2410_repo` 內含獨立的 `.git` 資料夾，父層 `IoT_Course` 只將它視為未追蹤的嵌入 repository，因此元件內容沒有進入父層 GitHub repository。
+- **作法：**將元件工作樹內容改以父 repository 的一般追蹤檔案納入，保留原有 Arduino、文件、MicroPython、測試與工具檔；依父層 `.gitignore` 排除 `.dsh-meow/` 與 `__pycache__/` 等本機產物，不納入巢狀 `.git` metadata。同步更新本紀錄並提交至目前分支。
+- **影響：**GitHub 的父 repository 可直接取得 `元件/LD2410_repo` 內容；本機原有 LD2410 獨立 repository metadata 不作為父 repository 檔案。根專案既有未相關工作區變更不納入本次提交。
+- **驗證：**檢查父 repository 遠端為 `https://github.com/nschou/IoT_Course.git`、目前分支為 `feature/ld2410b-integration`，確認最大待同步檔案小於 GitHub 單檔限制；執行 `git diff --cached --check`。本次未執行 Python 測試，因只同步元件檔案與版控紀錄。
+- **部署／回復：**推送目前分支至 `origin`；回復時以本次提交的父 repository 反向提交移除 `元件/LD2410_repo`，不影響本機未追蹤的獨立 repository metadata。
+
 ## CHG-20261121-075｜LD2410 測試與驅動集中到 micropython 套件；專案改為相容層
 
 - **類別：**需求變更（專案組織）。
